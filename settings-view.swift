@@ -8,11 +8,11 @@ struct SettingsView: View {
     @State private var showingResetConfirmation = false
     @State private var showingLogViewer = false
     
-    // Settings state variables
-    @AppStorage("haptics_enabled") private var hapticsEnabled = true
-    @AppStorage("continue_enabled") private var continueEnabled = true
-    @AppStorage("logging_enabled") private var loggingEnabled = false
-    @AppStorage("log_to_file") private var logToFile = false
+    // Use proper initialization with defaults from UserDefaults
+    @AppStorage("haptics_enabled") private var hapticsEnabled = UserDefaults.standard.bool(forKey: "haptics_enabled")
+    @AppStorage("continue_enabled") private var continueEnabled = UserDefaults.standard.bool(forKey: "continue_enabled")
+    @AppStorage("logging_enabled") private var loggingEnabled = UserDefaults.standard.bool(forKey: "logging_enabled")
+    @AppStorage("log_to_file") private var logToFile = UserDefaults.standard.bool(forKey: "log_to_file")
     
     var body: some View {
         NavigationView {
@@ -31,21 +31,26 @@ struct SettingsView: View {
                             AudioManager.shared.playButtonTapSound()
                         }
                     }
+                    .accessibilityHint("Toggle sound effects on or off")
                     
                     // Volume slider
                     if !audioManager.isMuted {
                         HStack {
                             Image(systemName: "speaker")
                                 .foregroundColor(.gray)
+                                .accessibility(hidden: true)
                             
                             Slider(value: $audioManager.volume, in: 0...1) { _ in
                                 if !audioManager.isMuted {
                                     AudioManager.shared.playButtonTapSound()
                                 }
                             }
+                            .accessibilityLabel("Volume level")
+                            .accessibilityValue("\(Int(audioManager.volume * 100))%")
                             
                             Image(systemName: "speaker.wave.3")
                                 .foregroundColor(.gray)
+                                .accessibility(hidden: true)
                         }
                     }
                 }
@@ -60,6 +65,7 @@ struct SettingsView: View {
                             HapticManager.shared.mediumImpact()
                         }
                     }
+                    .accessibilityHint("Toggle vibration feedback when playing")
                 }
                 
                 // Game settings
@@ -68,11 +74,13 @@ struct SettingsView: View {
                     Toggle(isOn: $continueEnabled) {
                         Label("Continue Last Game", systemImage: "arrow.clockwise")
                     }
+                    .accessibilityHint("Enable or disable the continue game option")
                     
                     // Show high scores
                     NavigationLink(destination: HighScoresView()) {
                         Label("High Scores", systemImage: "trophy")
                     }
+                    .accessibilityHint("View your high scores")
                     
                     // Reset progress
                     Button(action: {
@@ -81,6 +89,7 @@ struct SettingsView: View {
                         Label("Reset All Progress", systemImage: "trash")
                             .foregroundColor(.red)
                     }
+                    .accessibilityHint("Delete all your progress, high scores, and learned words")
                 }
                 
                 // Game statistics
@@ -94,17 +103,20 @@ struct SettingsView: View {
                     Toggle(isOn: $loggingEnabled) {
                         Label("Enable Logging", systemImage: "doc.text")
                     }
+                    .accessibilityHint("Enable or disable debug logging")
                     
                     if loggingEnabled {
                         Toggle(isOn: $logToFile) {
                             Label("Log to File", systemImage: "folder")
                         }
+                        .accessibilityHint("Save logs to a file that can be viewed later")
                         
                         Button(action: {
                             showingLogViewer = true
                         }) {
                             Label("View Logs", systemImage: "list.bullet")
                         }
+                        .accessibilityHint("View debug logs")
                     }
                 }
                 
@@ -130,6 +142,7 @@ struct SettingsView: View {
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .navigationBarItems(trailing: Button("Done") {
+                AudioManager.shared.playButtonTapSound()
                 presentationMode.wrappedValue.dismiss()
             })
             .alert(isPresented: $showingResetConfirmation) {
@@ -146,6 +159,8 @@ struct SettingsView: View {
                 LogViewerView()
             }
         }
+        // Apply consistent RTL for Hebrew content
+        .environment(\.layoutDirection, .rightToLeft)
     }
     
     private func resetAllProgress() {
@@ -198,6 +213,8 @@ struct GameStatisticsView: View {
             Text(value)
                 .fontWeight(.medium)
         }
+        .accessibilityElement(children: .combine)
+        .accessibility(label: Text("\(title): \(value)"))
     }
     
     private func formatTime(_ seconds: TimeInterval) -> String {
@@ -222,6 +239,7 @@ struct HighScoresView: View {
                     .foregroundColor(.gray)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding()
+                    .accessibility(label: Text("No high scores recorded yet"))
             } else {
                 ForEach(dataManager.highScores.indices, id: \.self) { index in
                     let score = dataManager.highScores[index]
@@ -231,6 +249,7 @@ struct HighScoresView: View {
                             .font(.headline)
                             .foregroundColor(index < 3 ? .yellow : .gray)
                             .frame(width: 30)
+                            .accessibility(label: Text("Rank \(index + 1)"))
                         
                         // Name
                         Text(score.playerName.isEmpty ? "Player" : score.playerName)
@@ -249,6 +268,8 @@ struct HighScoresView: View {
                         }
                     }
                     .padding(.vertical, 5)
+                    .accessibilityElement(children: .combine)
+                    .accessibility(label: Text("\(score.playerName.isEmpty ? "Player" : score.playerName): \(score.score) points, Level \(score.level), \(score.wordsCompleted) words"))
                 }
             }
         }
@@ -271,6 +292,7 @@ struct LogViewerView: View {
                         .padding()
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .accessibilityLabel(Text("Application logs"))
             }
             .navigationTitle("App Logs")
             .navigationBarTitleDisplayMode(.inline)
@@ -304,4 +326,3 @@ struct SettingsView_Previews: PreviewProvider {
         SettingsView()
     }
 }
-            
