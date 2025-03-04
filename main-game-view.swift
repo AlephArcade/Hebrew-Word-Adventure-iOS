@@ -274,24 +274,16 @@ struct MainGameView: View {
             previousAnimatingCorrect = false
             showConfetti = false
         }
-        .onChange(of: gameState.animatingCorrect) { newValue in
-            // Handle correct animation state change
-            if newValue && !previousAnimatingCorrect {
-                previousAnimatingCorrect = true
-                showConfetti = true
-                AudioManager.shared.playCorrectAnswerSound()
-                HapticManager.shared.success()
-                
-                // Hide confetti after animation completes
-                DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
-                    guard let self = self else { return }
-                    self.showConfetti = false
-                }
-            } else if !newValue && previousAnimatingCorrect {
-                // Reset the flag when animation ends
-                previousAnimatingCorrect = false
-            }
+        // iOS 17 compatible onChange
+        #if swift(>=5.9)
+        .onChange(of: gameState.animatingCorrect) { oldValue, newValue in
+            handleAnimationChange(newValue)
         }
+        #else
+        .onChange(of: gameState.animatingCorrect) { newValue in
+            handleAnimationChange(newValue)
+        }
+        #endif
         .onDisappear {
             // Clean up when view disappears
             showConfetti = false
@@ -301,6 +293,24 @@ struct MainGameView: View {
         .id("game-view-\(gameState.animatingCorrect)-\(gameState.animatingIncorrect)-\(gameState.score)")
         // Apply RTL for entire Hebrew-language game UI
         .environment(\.layoutDirection, .rightToLeft)
+    }
+    
+    private func handleAnimationChange(_ newValue: Bool) {
+        // Handle correct animation state change
+        if newValue && !previousAnimatingCorrect {
+            previousAnimatingCorrect = true
+            showConfetti = true
+            AudioManager.shared.playCorrectAnswerSound()
+            HapticManager.shared.success()
+            
+            // Hide confetti after animation completes
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                showConfetti = false
+            }
+        } else if !newValue && previousAnimatingCorrect {
+            // Reset the flag when animation ends
+            previousAnimatingCorrect = false
+        }
     }
 }
 
@@ -349,12 +359,22 @@ struct LetterTileView: View {
         .onAppear {
             setupTileAnimation()
         }
+        // iOS 17 compatible onChange
+        #if swift(>=5.9)
+        .onChange(of: animatingCorrect) { _, newValue in
+            setupTileAnimation()
+        }
+        .onChange(of: animatingIncorrect) { _, newValue in
+            setupTileAnimation()
+        }
+        #else
         .onChange(of: animatingCorrect) { newValue in
             setupTileAnimation()
         }
         .onChange(of: animatingIncorrect) { newValue in
             setupTileAnimation()
         }
+        #endif
         // Create a unique ID to force refresh when animation state changes
         .id("\(letter)-\(isSelected ? 1 : 0)-\(animatingCorrect ? 1 : 0)-\(animatingIncorrect ? 1 : 0)")
     }
@@ -394,10 +414,9 @@ struct LetterTileView: View {
             }
             
             // Reset scale animation after completion
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-                guard let self = self else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                 withAnimation {
-                    self.animationAmount = 1.0
+                    animationAmount = 1.0
                 }
             }
         }
@@ -410,10 +429,9 @@ struct LetterTileView: View {
             }
             
             // Reset after animation completes
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                guard let self = self else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 withAnimation {
-                    self.animationAmount = 1.0
+                    animationAmount = 1.0
                 }
             }
         }
@@ -447,12 +465,22 @@ struct AnswerSlotView: View {
         .onAppear {
             setupAnimation()
         }
+        // iOS 17 compatible onChange
+        #if swift(>=5.9)
+        .onChange(of: isCorrect) { _, newValue in
+            setupAnimation()
+        }
+        .onChange(of: isIncorrect) { _, newValue in
+            setupAnimation()
+        }
+        #else
         .onChange(of: isCorrect) { newValue in
             setupAnimation()
         }
         .onChange(of: isIncorrect) { newValue in
             setupAnimation()
         }
+        #endif
         // Create a unique ID to force refresh when state changes
         .id("\(letter)-\(isCorrect ? 1 : 0)-\(isIncorrect ? 1 : 0)-\(index)")
     }
@@ -483,19 +511,16 @@ struct AnswerSlotView: View {
             }
             
             // Add staggered animation delay based on index for right-to-left effect
-            DispatchQueue.main.asyncAfter(deadline: .now() + Double(index) * 0.15) { [weak self] in
-                guard let self = self else { return }
-                
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(index) * 0.15) {
                 // Start animation
                 withAnimation(Animation.easeInOut(duration: 0.5).repeatCount(1, autoreverses: true)) {
-                    self.animationAmount = 1.1
+                    animationAmount = 1.1
                 }
                 
                 // Reset animation
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                    guard let self = self else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     withAnimation {
-                        self.animationAmount = 1.0
+                        animationAmount = 1.0
                     }
                 }
             }
@@ -506,10 +531,9 @@ struct AnswerSlotView: View {
             }
             
             // Reset after animation completes
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                guard let self = self else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 withAnimation {
-                    self.animationAmount = 1.0
+                    animationAmount = 1.0
                 }
             }
         } else {
