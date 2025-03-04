@@ -149,38 +149,68 @@ struct ContentView: View {
         AudioManager.shared.playButtonTapSound()
         HapticManager.shared.mediumImpact()
     }
-    import SwiftUI
-
-struct ContentView: View {
-    @StateObject private var gameState = GameState()
-    @State private var showingStartScreen = true
     
-    var body: some View {
-        ZStack {
-            // Background color
-            Color(red: 15/255, green: 20/255, blue: 25/255)
-                .ignoresSafeArea()
-            
-            if showingStartScreen {
-                StartScreenView(startGame: {
-                    withAnimation {
-                        showingStartScreen = false
-                        gameState.startGame()
-                    }
-                })
-            } else {
-                // Main game content
-                ZStack {
-                    if gameState.completed {
-                        GameOverView(gameState: gameState)
-                    } else if gameState.inBonusRound {
-                        BonusRoundView(gameState: gameState)
-                    } else {
-                        MainGameView(gameState: gameState)
+    /// Saves the current game state for continuing later
+    private func saveGameState() {
+        let state = SavedGameState(
+            level: gameState.level,
+            score: gameState.score,
+            lives: gameState.lives,
+            hintsRemaining: gameState.hintsRemaining,
+            streak: gameState.streak,
+            completedWords: gameState.completedWords,
+            date: Date()
+        )
+        
+        gameDataManager.saveGameState(state)
+    }
+
+    /// Checks for a saved game on app launch
+    private func checkForSavedGame() {
+        // If there's a saved game state, enable the continue button
+        if gameDataManager.savedGameState != nil {
+            // Any setup needed for the continue button
+        }
+    }
+
+    /// Records game statistics after completion
+    private func recordGameStatistics() {
+        let gameTime = Date().timeIntervalSince(gameStartTime)
+        
+        // Calculate total words completed across all levels
+        var totalWordsCompleted = 0
+        for (_, words) in gameState.completedWords {
+            totalWordsCompleted += words.count
+        }
+        
+        // Record statistics
+        gameDataManager.recordGameCompletion(
+            score: gameState.score,
+            level: gameState.level,
+            wordsCompleted: totalWordsCompleted,
+            time: gameTime
+        )
+        
+        // Add high score if applicable
+        gameDataManager.addHighScore(
+            score: gameState.score,
+            level: gameState.level,
+            wordsCompleted: totalWordsCompleted
+        )
+        
+        // Add learned words to dictionary
+        for (_, words) in gameState.completedWords {
+            let learnedWords = words.compactMap { hebrewWord -> Word? in
+                // Find the word object for each completed Hebrew word string
+                for (_, wordList) in gameState.wordBanks {
+                    if let word = wordList.first(where: { $0.hebrew == hebrewWord }) {
+                        return word
                     }
                 }
-                .transition(.opacity)
+                return nil
             }
+            
+            gameDataManager.addLearnedWords(learnedWords)
         }
     }
 }
@@ -188,7 +218,12 @@ struct ContentView: View {
 // Start Screen View
 struct StartScreenView: View {
     let startGame: () -> Void
+    let continuePreviousGame: () -> Void
+    let openSettings: () -> Void
+    let openDictionary: () -> Void
+    
     @State private var animating = false
+    @ObservedObject private var dataManager = GameDataManager.shared
     
     var body: some View {
         VStack(spacing: 30) {
@@ -251,21 +286,68 @@ struct StartScreenView: View {
             
             Spacer()
             
-            // Start button
-            Button(action: startGame) {
-                Text("START QUEST")
-                    .font(.headline)
-                    .foregroundColor(.black)
-                    .padding()
-                    .frame(width: 220)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(Color.yellow)
-                    )
-                    .shadow(color: .yellow.opacity(0.5), radius: 5)
+            // Buttons
+            VStack(spacing: 15) {
+                // Start button
+                Button(action: startGame) {
+                    Text("NEW GAME")
+                        .font(.headline)
+                        .foregroundColor(.black)
+                        .padding()
+                        .frame(width: 220)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(Color.yellow)
+                        )
+                        .shadow(color: .yellow.opacity(0.5), radius: 5)
+                }
+                .offset(y: animating ? 0 : 20)
+                .opacity(animating ? 1 : 0)
+                
+                // Continue button (only if there's a saved game)
+                if dataManager.savedGameState != nil {
+                    Button(action: continuePreviousGame) {
+                        Text("CONTINUE")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .padding()
+                            .frame(width: 220)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(Color.blue)
+                            )
+                    }
+                    .offset(y: animating ? 0 : 20)
+                    .opacity(animating ? 1 : 0)
+                }
+                
+                // Dictionary button
+                Button(action: openDictionary) {
+                    Text("DICTIONARY")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .padding()
+                        .frame(width: 220)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(Color.white, lineWidth: 2)
+                        )
+                }
+                .offset(y: animating ? 0 : 20)
+                .opacity(animating ? 1 : 0)
+                
+                // Settings button
+                Button(action: openSettings) {
+                    Image(systemName: "gearshape")
+                        .font(.title2)
+                        .foregroundColor(.white)
+                        .padding(10)
+                        .background(Circle().stroke(Color.white, lineWidth: 2))
+                }
+                .padding(.top, 10)
+                .offset(y: animating ? 0 : 20)
+                .opacity(animating ? 1 : 0)
             }
-            .offset(y: animating ? 0 : 20)
-            .opacity(animating ? 1 : 0)
             
             // Version info
             Text("v1.0")
