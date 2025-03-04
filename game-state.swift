@@ -26,6 +26,7 @@ class GameState: ObservableObject {
     @Published var currentBonusChallenge: BonusChallenge?
     @Published var message: String = ""
     @Published var showingMessage: Bool = false
+    @Published var isPaused: Bool = false
     
     // Error handling
     private let errorHandler = ErrorHandler.shared
@@ -33,6 +34,11 @@ class GameState: ObservableObject {
     
     // Game timer
     private var bonusTimer: Timer?
+    private var messageTimer: DispatchWorkItem?
+    
+    // For managing background state
+    private var backgroundObserver: Any?
+    private var foregroundObserver: Any?
     
     // Word Banks - data imported from the JavaScript version
     let wordBanks: [Int: [Word]] = [
@@ -125,6 +131,47 @@ class GameState: ObservableObject {
     
     init() {
         logger.log(.info, "GameState initialized", category: Logger.Category.game)
+        
+        // Set up app lifecycle observers
+        setupAppLifecycleObservers()
+    }
+    
+    // MARK: - App Lifecycle Management
+    
+    private func setupAppLifecycleObservers() {
+        // Observer for when app goes to background
+        backgroundObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.handleAppBackground()
+        }
+        
+        // Observer for when app comes to foreground
+        foregroundObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.willEnterForegroundNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.handleAppForeground()
+        }
+    }
+    
+    private func handleAppBackground() {
+        // Pause any time-sensitive activities
+        if inBonusRound {
+            pauseBonusRoundIfNeeded()
+            isPaused = true
+        }
+    }
+    
+    private func handleAppForeground() {
+        // Resume activities if needed
+        if isPaused && inBonusRound {
+            resumeBonusRoundIfNeeded()
+            isPaused = false
+        }
     }
     
     // MARK: - Game Methods
@@ -150,6 +197,11 @@ class GameState: ObservableObject {
         bonusReward = BonusReward(extraHints: 0, scoreMultiplier: 1)
         lives = 10
         maxLives = 10
+        isPaused = false
+        
+        // Cancel any existing timers
+        bonusTimer?.invalidate()
+        bonusTimer = nil
         
         // Start the first word
         setupWord()
@@ -331,6 +383,12 @@ class GameState: ObservableObject {
         active = false
         completed = true
         
+        // Clean up any timers
+        bonusTimer?.invalidate()
+        bonusTimer = nil
+        messageTimer?.cancel()
+        messageTimer = nil
+        
         logger.log(.info, "Game over. Final score: \(score)", category: Logger.Category.game)
     }
     
@@ -346,7 +404,7 @@ class GameState: ObservableObject {
             // Start the timer
             bonusTimer?.invalidate()
             bonusTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-                guard let self = self else { return }
+                guard let self = self, !self.isPaused else { return }
                 self.bonusTimeRemaining -= 1
                 
                 if self.bonusTimeRemaining <= 0 {
@@ -354,6 +412,9 @@ class GameState: ObservableObject {
                     self.endBonusRound(success: false) // Timeout
                 }
             }
+            
+            // Add the timer to the common run loop mode
+            RunLoop.current.add(bonusTimer!, forMode: .common)
             
             logger.log(.info, "Bonus round started at level \(level)", category: Logger.Category.game)
         } else {
@@ -363,8 +424,42 @@ class GameState: ObservableObject {
         }
     }
     
+    func pauseBonusRoundIfNeeded() {
+        if inBonusRound {
+            // Pause the timer
+            bonusTimer?.invalidate()
+            bonusTimer = nil
+            isPaused = true
+            
+            logger.log(.info, "Bonus round paused", category: Logger.Category.game)
+        }
+    }
+    
+    func resumeBonusRoundIfNeeded() {
+        if inBonusRound && isPaused && bonusTimeRemaining > 0 {
+            // Restart the timer
+            bonusTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+                guard let self = self, !self.isPaused else { return }
+                self.bonusTimeRemaining -= 1
+                
+                if self.bonusTimeRemaining <= 0 {
+                    self.bonusTimer?.invalidate()
+                    self.endBonusRound(success: false) // Timeout
+                }
+            }
+            
+            // Add the timer to the common run loop mode
+            RunLoop.current.add(bonusTimer!, forMode: .common)
+            
+            isPaused = false
+            
+            logger.log(.info, "Bonus round resumed", category: Logger.Category.game)
+        }
+    }
+    
     func handleBonusSelection(selected: String) {
         bonusTimer?.invalidate() // Stop the timer
+        bonusTimer = nil
         
         guard let challenge = currentBonusChallenge else {
             logger.log(.error, "No bonus challenge available", category: Logger.Category.game)
@@ -402,7 +497,9 @@ class GameState: ObservableObject {
     
     func endBonusRound(success: Bool) {
         inBonusRound = false
+        isPaused = false
         bonusTimer?.invalidate()
+        bonusTimer = nil
         
         // Notify game data manager of bonus round completion
         GameDataManager.shared.recordBonusRoundCompletion(success: success)
@@ -487,19 +584,39 @@ class GameState: ObservableObject {
     }
     
     func showMessage(_ text: String) {
+        // Cancel any previous message timer
+        messageTimer?.cancel()
+        
         message = text
         showingMessage = true
         
-        // Hide message after 3 seconds
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+        // Hide message after 3 seconds using a dispatch work item for better cancellation
+        let workItem = DispatchWorkItem { [weak self] in
             self?.showingMessage = false
         }
+        messageTimer = workItem
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3, execute: workItem)
     }
     
     // Called when the game view disappears to clean up resources
     func cleanup() {
+        // Cancel any timers
         bonusTimer?.invalidate()
         bonusTimer = nil
+        messageTimer?.cancel()
+        messageTimer = nil
+        
+        // Remove observers
+        if let backgroundObserver = backgroundObserver {
+            NotificationCenter.default.removeObserver(backgroundObserver)
+            self.backgroundObserver = nil
+        }
+        
+        if let foregroundObserver = foregroundObserver {
+            NotificationCenter.default.removeObserver(foregroundObserver)
+            self.foregroundObserver = nil
+        }
         
         logger.log(.info, "GameState resources cleaned up", category: Logger.Category.game)
     }
