@@ -268,18 +268,16 @@ struct MainGameView: View {
         .environment(\.layoutDirection, .rightToLeft)
     }
     
-    // This function handles the confetti animation by watching for state changes
+   // This function handles the confetti animation by watching for state changes
     private func setupAnimationTimer() {
         // Clean up existing timer if any
         cleanupAnimationTimer()
         
         // Create a new timer
-        animationTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            guard let self = self else { return }
-            
-            if self.gameState.animatingCorrect && !self.previousAnimatingCorrect {
-                self.previousAnimatingCorrect = true
-                self.showConfetti = true
+        animationTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [self] _ in
+            if gameState.animatingCorrect && !previousAnimatingCorrect {
+                previousAnimatingCorrect = true
+                showConfetti = true
                 AudioManager.shared.playCorrectAnswerSound()
                 HapticManager.shared.success()
                 
@@ -287,8 +285,8 @@ struct MainGameView: View {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
                     self.showConfetti = false
                 }
-            } else if !self.gameState.animatingCorrect {
-                self.previousAnimatingCorrect = false
+            } else if !gameState.animatingCorrect {
+                previousAnimatingCorrect = false
             }
         }
         
@@ -408,7 +406,6 @@ struct AnswerSlotView: View {
     }
 }
 
-// Simple confetti effect view that doesn't use a modifier
 struct ConfettiEffectView: View {
     @State private var confetti: [ConfettiPiece] = []
     @State private var animationTasks: [DispatchWorkItem] = []
@@ -489,9 +486,9 @@ struct ConfettiEffectView: View {
         }
         
         // Create a cleanup task
-        let cleanupTask = DispatchWorkItem { [weak self] in
-            self?.confetti = []
-            self?.animationTasks.removeAll()
+        let cleanupTask = DispatchWorkItem { [self] in
+            confetti = []
+            animationTasks.removeAll()
         }
         
         animationTasks.append(cleanupTask)
