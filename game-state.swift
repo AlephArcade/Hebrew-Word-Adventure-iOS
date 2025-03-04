@@ -235,96 +235,96 @@ class GameState: ObservableObject {
     }
     
     func checkAnswer() {
-    guard let currentWord = currentWord else { return }
-    
-    // Build the word from selected letters
-    let selectedWord = selectedLetters.map { shuffledLetters[$0] }.joined()
-    
-    if selectedWord == currentWord.hebrew {
-        // Correct answer
-        animatingCorrect = true
-        wordsCompleted += 1
+        guard let currentWord = currentWord else { return }
         
-        // Update completed words
-        let wordLength = getWordLengthForLevel(level: level)
-        if var completedForLevel = completedWords[wordLength] {
-            completedForLevel.append(currentWord.hebrew)
-            completedWords[wordLength] = completedForLevel
-        } else {
-            completedWords[wordLength] = [currentWord.hebrew]
-        }
+        // Build the word from selected letters
+        let selectedWord = selectedLetters.map { shuffledLetters[$0] }.joined()
         
-        // Update progress
-        if let wordsInLevel = wordBanks[wordLength]?.count, wordsInLevel > 0 {
-            currentLevelProgress = Double(completedWords[wordLength]?.count ?? 0) / Double(wordsInLevel) * 100
-        }
-        
-        // Calculate points with bonus if streak is active
-        var pointsEarned = currentWord.hebrew.count * 10
-        
-        if bonusActive {
-            pointsEarned = Int(Double(pointsEarned) * 1.5) // 50% bonus
-        }
-        
-        score += pointsEarned
-        streak += 1
-        
-        // Update bonus status
-        bonusActive = streak >= 3
-        
-        // Show appropriate message
-        if bonusActive {
-            showMessage("+\(pointsEarned) points with streak bonus! 🔥")
-        } else {
-            showMessage("AWESOME! +\(pointsEarned) points!")
-        }
-        
-        // Delay before next word - longer to allow for animations
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
-            guard let self = self else { return }
+        if selectedWord == currentWord.hebrew {
+            // Correct answer
+            animatingCorrect = true
+            wordsCompleted += 1
             
-            // First set animatingCorrect to false
-            self.animatingCorrect = false
-            
-            let wordLength = self.getWordLengthForLevel(level: self.level)
-            if let completedCount = self.completedWords[wordLength]?.count,
-               let totalWords = self.wordBanks[wordLength]?.count,
-               completedCount == totalWords {
-                // Level complete
-                if self.level < 6 {
-                    self.startBonusRound()
-                } else {
-                    self.completed = true
-                }
+            // Update completed words
+            let wordLength = getWordLengthForLevel(level: level)
+            if var completedForLevel = completedWords[wordLength] {
+                completedForLevel.append(currentWord.hebrew)
+                completedWords[wordLength] = completedForLevel
             } else {
-                // Continue with next word
-                self.setupWord()
+                completedWords[wordLength] = [currentWord.hebrew]
             }
-        }
-    } else {
-        // Incorrect answer
-        lives = max(0, lives - 1)
-        
-        if lives <= 0 {
-            showMessage("GAME OVER!")
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-                self?.gameOver()
+            
+            // Update progress
+            if let wordsInLevel = wordBanks[wordLength]?.count, wordsInLevel > 0 {
+                currentLevelProgress = Double(completedWords[wordLength]?.count ?? 0) / Double(wordsInLevel) * 100
             }
-            return
-        }
-        
-        showMessage("Try again! Lost 1 life.")
-        
-        // Reset streak on error
-        streak = 0
-        bonusActive = false
-        
-        // Reset selection after a delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
-            self?.selectedLetters = []
+            
+            // Calculate points with bonus if streak is active
+            var pointsEarned = currentWord.hebrew.count * 10
+            
+            if bonusActive {
+                pointsEarned = Int(Double(pointsEarned) * 1.5) // 50% bonus
+            }
+            
+            score += pointsEarned
+            streak += 1
+            
+            // Update bonus status
+            bonusActive = streak >= 3
+            
+            // Show appropriate message
+            if bonusActive {
+                showMessage("+\(pointsEarned) points with streak bonus! 🔥")
+            } else {
+                showMessage("AWESOME! +\(pointsEarned) points!")
+            }
+            
+            // Delay before next word - longer to allow for animations
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
+                guard let self = self else { return }
+                
+                // First set animatingCorrect to false
+                self.animatingCorrect = false
+                
+                let wordLength = self.getWordLengthForLevel(level: self.level)
+                if let completedCount = self.completedWords[wordLength]?.count,
+                   let totalWords = self.wordBanks[wordLength]?.count,
+                   completedCount == totalWords {
+                    // Level complete
+                    if self.level < 6 {
+                        self.startBonusRound()
+                    } else {
+                        self.completed = true
+                    }
+                } else {
+                    // Continue with next word
+                    self.setupWord()
+                }
+            }
+        } else {
+            // Incorrect answer
+            lives = max(0, lives - 1)
+            
+            if lives <= 0 {
+                showMessage("GAME OVER!")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                    self?.gameOver()
+                }
+                return
+            }
+            
+            showMessage("Try again! Lost 1 life.")
+            
+            // Reset streak on error
+            streak = 0
+            bonusActive = false
+            
+            // Reset selection after a delay
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+                self?.selectedLetters = []
+            }
         }
     }
-}
     
     func gameOver() {
         // Game over logic
@@ -431,8 +431,9 @@ class GameState: ObservableObject {
         if animatingCorrect { return }
         selectedLetters = []
     }
-        
-         if hintsRemaining <= 0 || animatingCorrect { return }
+    
+    func getHint() {
+        if hintsRemaining <= 0 || animatingCorrect { return }
         
         guard let currentWord = currentWord else { return }
         
@@ -455,35 +456,33 @@ class GameState: ObservableObject {
                 selectedLetters = []
             }
         }
+        
+        // If all letters are already selected, no hint needed
+        if nextLetterPosition >= currentWord.hebrew.count { return }
+        
+        // Get the correct letter for the next position
+        let correctLetterIndex = currentWord.hebrew.index(currentWord.hebrew.startIndex, offsetBy: nextLetterPosition)
+        let correctLetter = String(currentWord.hebrew[correctLetterIndex])
+        
+        // Find this letter in the shuffled array that's not already selected
+        if let hintIndex = shuffledLetters.firstIndex(where: { letter in
+            letter == correctLetter && !selectedLetters.contains(shuffledLetters.firstIndex(of: letter) ?? -1)
+        }) {
+            // Add this letter to the selection
+            selectedLetters.append(hintIndex)
+            hintsRemaining -= 1
+            score = max(0, score - 5) // Penalty for using a hint
             
-            // If all letters are already selected, no hint needed
-    if nextLetterPosition >= currentWord.hebrew.count { return }
-    
-    // Get the correct letter for the next position
-    let correctLetterIndex = currentWord.hebrew.index(currentWord.hebrew.startIndex, offsetBy: nextLetterPosition)
-    let correctLetter = String(currentWord.hebrew[correctLetterIndex])
-    
-    // Find this letter in the shuffled array that's not already selected
-    if let hintIndex = shuffledLetters.firstIndex(where: { letter in
-        letter == correctLetter && !selectedLetters.contains(shuffledLetters.firstIndex(of: letter) ?? -1)
-    }) {
-        // Add this letter to the selection
-        selectedLetters.append(hintIndex)
-        hintsRemaining -= 1
-        score = max(0, score - 5) // Penalty for using a hint
-        
-        showMessage("Hint: Letter \(nextLetterPosition + 1) selected")
-        
-        // If all letters are now selected, check the answer
-        if selectedLetters.count == currentWord.hebrew.count {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                self?.checkAnswer()
+            showMessage("Hint: Letter \(nextLetterPosition + 1) selected")
+            
+            // If all letters are now selected, check the answer after a delay
+            if selectedLetters.count == currentWord.hebrew.count {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                    self?.checkAnswer()
+                }
             }
             
             logger.log(.info, "Hint used for position \(nextLetterPosition + 1), letter: \(correctLetter)", category: Logger.Category.game)
-        } catch {
-            errorHandler.handle(error, showToUser: false)
-            logger.logError(error, category: Logger.Category.game)
         }
     }
     
