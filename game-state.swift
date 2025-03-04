@@ -178,7 +178,10 @@ class GameState: ObservableObject {
     // MARK: - Game Methods
     
     func startGame() {
-        // Reset all game state variables
+        // First cancel any timers or pending work
+        cleanup()
+        
+        // Now reset all state
         active = true
         level = 1
         currentWord = nil
@@ -190,6 +193,7 @@ class GameState: ObservableObject {
         hintsRemaining = 15
         completed = false
         animatingCorrect = false
+        animatingIncorrect = false
         wordsCompleted = 0
         completedWords = [:]
         currentLevelProgress = 0
@@ -200,9 +204,8 @@ class GameState: ObservableObject {
         maxLives = 10
         isPaused = false
         
-        // Cancel any existing timers
-        bonusTimer?.invalidate()
-        bonusTimer = nil
+        // Setup app lifecycle observers that were cleared in cleanup
+        setupAppLifecycleObservers()
         
         // Start the first word
         setupWord()
@@ -250,6 +253,7 @@ class GameState: ObservableObject {
             // Reset selections
             selectedLetters = []
             animatingCorrect = false
+            animatingIncorrect = false
             
             // Update bonus status
             bonusActive = streak >= 3
@@ -265,7 +269,6 @@ class GameState: ObservableObject {
         return level < 6 ? level + 1 : 6
     }
     
-// Replace handleLetterSelect function to fix the deselection logic:
     func handleLetterSelect(index: Int) {
         // Prevent selection during animation
         if animatingCorrect || animatingIncorrect { return }
@@ -287,9 +290,7 @@ class GameState: ObservableObject {
             checkAnswer()
         }
     }
-
     
-    // Update the checkAnswer function to handle incorrect answers with animation
     func checkAnswer() {
         guard let currentWord = currentWord else { return }
         
@@ -335,8 +336,10 @@ class GameState: ObservableObject {
                 showMessage("AWESOME! +\(pointsEarned) points!")
             }
             
-            // Delay before next word - longer to allow for animations
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [self] in
+            // Delay before next word - adjusted to match confetti animation
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+                guard let self = self else { return }
+                
                 // First set animatingCorrect to false
                 self.animatingCorrect = false
                 
@@ -364,7 +367,8 @@ class GameState: ObservableObject {
             
             if lives <= 0 {
                 showMessage("GAME OVER!")
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [self] in
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                    guard let self = self else { return }
                     self.gameOver()
                 }
                 return
@@ -377,7 +381,8 @@ class GameState: ObservableObject {
             bonusActive = false
             
             // Reset selection and animation after a delay
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [self] in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+                guard let self = self else { return }
                 self.selectedLetters = []
                 self.animatingIncorrect = false
             }
@@ -484,7 +489,8 @@ class GameState: ObservableObject {
             
             // End the bonus round after a delay
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-                self?.endBonusRound(success: true)
+                guard let self = self else { return }
+                self.endBonusRound(success: true)
             }
             
             logger.log(.info, "Bonus round correct answer: \(selected)", category: Logger.Category.game)
@@ -494,7 +500,8 @@ class GameState: ObservableObject {
             
             // End after a brief delay
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
-                self?.endBonusRound(success: false)
+                guard let self = self else { return }
+                self.endBonusRound(success: false)
             }
             
             logger.log(.info, "Bonus round incorrect answer: \(selected), correct was: \(challenge.correct)", category: Logger.Category.game)
@@ -581,7 +588,8 @@ class GameState: ObservableObject {
             // If all letters are now selected, check the answer after a delay
             if selectedLetters.count == currentWord.hebrew.count {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                    self?.checkAnswer()
+                    guard let self = self else { return }
+                    self.checkAnswer()
                 }
             }
             
@@ -592,26 +600,32 @@ class GameState: ObservableObject {
     func showMessage(_ text: String) {
         // Cancel any previous message timer
         messageTimer?.cancel()
+        messageTimer = nil
         
         message = text
         showingMessage = true
         
         // Hide message after 3 seconds using a dispatch work item for better cancellation
         let workItem = DispatchWorkItem { [weak self] in
-            self?.showingMessage = false
+            guard let self = self else { return }
+            self.showingMessage = false
         }
         messageTimer = workItem
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 3, execute: workItem)
     }
     
-    // Called when the game view disappears to clean up resources
+    // Enhance the cleanup method to prevent memory leaks
     func cleanup() {
         // Cancel any timers
         bonusTimer?.invalidate()
         bonusTimer = nil
         messageTimer?.cancel()
         messageTimer = nil
+        
+        // Reset animation states to prevent side effects when restarting
+        animatingCorrect = false
+        animatingIncorrect = false
         
         // Remove observers
         if let backgroundObserver = backgroundObserver {
