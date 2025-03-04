@@ -27,6 +27,7 @@ class GameState: ObservableObject {
     @Published var message: String = ""
     @Published var showingMessage: Bool = false
     @Published var isPaused: Bool = false
+    @Published var animatingIncorrect: Bool = false
     
     // Error handling
     private let errorHandler = ErrorHandler.shared
@@ -270,9 +271,9 @@ class GameState: ObservableObject {
         
         // Check if already selected
         if selectedLetters.contains(index) {
-            // If this is the last letter selected, deselect it
-            if selectedLetters.last == index {
-                selectedLetters.removeLast()
+            // Remove this letter from selection, regardless of position
+            if let position = selectedLetters.firstIndex(of: index) {
+                selectedLetters.remove(at: position)
             }
             return
         }
@@ -283,9 +284,10 @@ class GameState: ObservableObject {
         // Check if selection is complete
         if selectedLetters.count == currentWord?.hebrew.count {
             checkAnswer()
-        }
+            }
     }
     
+    // Update the checkAnswer function to handle incorrect answers with animation
     func checkAnswer() {
         guard let currentWord = currentWord else { return }
         
@@ -332,9 +334,7 @@ class GameState: ObservableObject {
             }
             
             // Delay before next word - longer to allow for animations
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
-                guard let self = self else { return }
-                
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [self] in
                 // First set animatingCorrect to false
                 self.animatingCorrect = false
                 
@@ -357,10 +357,13 @@ class GameState: ObservableObject {
             // Incorrect answer
             lives = max(0, lives - 1)
             
+            // Set flag for animation to show incorrect answer
+            animatingIncorrect = true
+            
             if lives <= 0 {
                 showMessage("GAME OVER!")
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-                    self?.gameOver()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [self] in
+                    self.gameOver()
                 }
                 return
             }
@@ -371,9 +374,10 @@ class GameState: ObservableObject {
             streak = 0
             bonusActive = false
             
-            // Reset selection after a delay
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
-                self?.selectedLetters = []
+            // Reset selection and animation after a delay
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [self] in
+                self.selectedLetters = []
+                self.animatingIncorrect = false
             }
         }
     }
