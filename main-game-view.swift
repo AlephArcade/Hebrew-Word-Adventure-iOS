@@ -38,99 +38,16 @@ struct MainGameView: View {
                         Text("LEVEL")
                             .font(.caption)
                             .foregroundColor(.gray)
-                        HStack(spacing: 5) {
-                            ZStack {
-                                Circle()
-                                    .fill(Color.orange)
-                                    .frame(width: 36, height: 36)
-                                Text("\(gameState.hintsRemaining)")
-                                    .font(.caption)
-                                    .foregroundColor(.white)
-                            }
-                        }
-                    }
-                    .disabled(gameState.hintsRemaining <= 0 || gameState.animatingCorrect)
-                    .opacity(gameState.hintsRemaining <= 0 ? 0.5 : 1)
-                }
-                .padding(.bottom)State.level)")
-                                    .font(.headline)
-                                    .foregroundColor(.white)
-                            }
-            }
-        }
-    }
-}
-
-// Letter Tile Component
-struct LetterTileView: View {
-    let letter: String
-    let isSelected: Bool
-    let selectionOrder: Int?
-    let animatingCorrect: Bool
-    let onTap: () -> Void
-    
-    var body: some View {
-        Button(action: onTap) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(isSelected ? Color.green : Color.white)
-                    .shadow(radius: 2)
-                    .aspectRatio(1, contentMode: .fit)
-                
-                Text(letter)
-                    .font(.system(size: 32, weight: .bold))
-                    .foregroundColor(isSelected ? .white : .black)
-                
-                // Selection order indicator
-                if let order = selectionOrder {
-                    Text("\(order)")
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
-                        .frame(width: 20, height: 20)
-                        .background(Circle().fill(Color.black.opacity(0.6)))
-                        .position(x: 60, y: 20)
-                }
-                
-                // Correct animation overlay
-                if animatingCorrect {
-                    Circle()
-                        .fill(Color.yellow.opacity(0.5))
-                        .scaleEffect(2)
-                        .opacity(0.8)
-                        .animation(Animation.easeInOut(duration: 0.5).repeatCount(3, autoreverses: true), value: animatingCorrect)
-                }
-            }
-        }
-        .disabled(isSelected || animatingCorrect)
-    }
-}
-
-// Answer Slot Component
-struct AnswerSlotView: View {
-    let letter: String
-    let isCorrect: Bool
-    
-    var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 8)
-                .fill(isCorrect ? Color.green : Color.gray.opacity(0.3))
-                .frame(width: 50, height: 50)
-            
-            Text(letter)
-                .font(.system(size: 28, weight: .bold))
-                .foregroundColor(.white)
-        }
-        .animation(.easeInOut, value: isCorrect)
-    }
-}
-                            // Level progress
-                            if let wordLength = gameState.wordBanks[gameState.getWordLengthForLevel(level: gameState.level)],
-                               let completed = gameState.completedWords[gameState.getWordLengthForLevel(level: gameState.level)]?.count {
-                                Text("\(completed)/\(wordLength.count)")
-                                    .font(.caption)
-                                    .foregroundColor(.gray)
-                            }
+                        Text("\(gameState.level)")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                        
+                        // Level progress
+                        if let wordLength = gameState.wordBanks[gameState.getWordLengthForLevel(level: gameState.level)],
+                           let completed = gameState.completedWords[gameState.getWordLengthForLevel(level: gameState.level)]?.count {
+                            Text("\(completed)/\(wordLength.count)")
+                                .font(.caption)
+                                .foregroundColor(.gray)
                         }
                     }
                     
@@ -296,3 +213,72 @@ struct AnswerSlotView: View {
                         .transition(.opacity)
                         .animation(.easeInOut, value: gameState.showingMessage)
                 }
+            }
+            .padding()
+        }
+    }
+}
+
+// Letter Tile Component
+struct LetterTileView: View {
+    let letter: String
+    let isSelected: Bool
+    let selectionOrder: Int?
+    let animatingCorrect: Bool
+    let onTap: () -> Void
+    
+    var body: some View {
+        Button(action: onTap) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(isSelected ? Color.green : Color.white)
+                    .shadow(radius: 2)
+                    .aspectRatio(1, contentMode: .fit)
+                
+                Text(letter)
+                    .font(.system(size: 32, weight: .bold))
+                    .foregroundColor(isSelected ? .white : .black)
+                
+                // Selection order indicator
+                if let order = selectionOrder {
+                    Text("\(order)")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                        .frame(width: 20, height: 20)
+                        .background(Circle().fill(Color.black.opacity(0.6)))
+                        .position(x: 60, y: 20)
+                }
+                
+                // Correct animation overlay
+                if animatingCorrect {
+                    Circle()
+                        .fill(Color.yellow.opacity(0.5))
+                        .scaleEffect(2)
+                        .opacity(0.8)
+                        .animation(Animation.easeInOut(duration: 0.5).repeatCount(3, autoreverses: true), value: animatingCorrect)
+                }
+            }
+        }
+        .disabled(isSelected || animatingCorrect)
+    }
+}
+
+// Answer Slot Component
+struct AnswerSlotView: View {
+    let letter: String
+    let isCorrect: Bool
+    
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(isCorrect ? Color.green : Color.gray.opacity(0.3))
+                .frame(width: 50, height: 50)
+            
+            Text(letter)
+                .font(.system(size: 28, weight: .bold))
+                .foregroundColor(.white)
+        }
+        .animation(.easeInOut, value: isCorrect)
+    }
+}
