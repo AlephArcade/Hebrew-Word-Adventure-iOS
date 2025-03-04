@@ -427,6 +427,101 @@ struct LetterTileView: View {
     }
 }
 
+// Answer Slot Component
+struct AnswerSlotView: View {
+    let letter: String
+    let isCorrect: Bool
+    let isIncorrect: Bool
+    let index: Int
+    
+    @State private var animationAmount: CGFloat = 1.0
+    @State private var hasAnimated: Bool = false
+    @State private var flashingColor: Bool = false
+    
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(slotColor)
+                .frame(maxWidth: .infinity)
+                .frame(height: 50)
+                .accessibleFrame()
+            
+            Text(letter)
+                .font(.system(size: 28, weight: .bold))
+                .foregroundColor(.white)
+        }
+        .scaleEffect(animationAmount)
+        .onAppear {
+            setupAnimation()
+        }
+        .onChange(of: isCorrect) { _ in
+            setupAnimation()
+        }
+        .onChange(of: isIncorrect) { _ in
+            setupAnimation()
+        }
+        // Create a unique ID to force refresh when state changes
+        .id("\(letter)-\(isCorrect ? 1 : 0)-\(isIncorrect ? 1 : 0)-\(index)")
+    }
+    
+    // Computed property for slot color
+    private var slotColor: Color {
+        if isCorrect {
+            return flashingColor ? Color.yellow : Color.green
+        } else if isIncorrect {
+            return Color.red
+        } else {
+            return Color.gray.opacity(0.3)
+        }
+    }
+    
+    private func setupAnimation() {
+        // Reset animation state
+        animationAmount = 1.0
+        flashingColor = false
+        
+        // Only animate when correct or incorrect
+        if isCorrect && !hasAnimated {
+            hasAnimated = true
+            
+            // Start flashing color animation
+            withAnimation(Animation.easeInOut(duration: 0.4).repeatCount(5, autoreverses: true)) {
+                flashingColor = true
+            }
+            
+            // Add staggered animation delay based on index for right-to-left effect
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(index) * 0.15) {
+                // Start animation
+                withAnimation(Animation.easeInOut(duration: 0.5).repeatCount(1, autoreverses: true)) {
+                    animationAmount = 1.1
+                }
+                
+                // Reset animation
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    withAnimation {
+                        animationAmount = 1.0
+                    }
+                }
+            }
+        } else if isIncorrect {
+            // Shake animation for incorrect answers
+            withAnimation(Animation.easeInOut(duration: 0.1).repeatCount(5, autoreverses: true)) {
+                animationAmount = 0.95
+            }
+            
+            // Reset after animation completes
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                withAnimation {
+                    animationAmount = 1.0
+                }
+            }
+        } else {
+            // Reset animated state when returning to normal
+            hasAnimated = false
+        }
+    }
+}
+
 // Extension to make frames accessible
 extension View {
     func accessibleFrame() -> some View {
