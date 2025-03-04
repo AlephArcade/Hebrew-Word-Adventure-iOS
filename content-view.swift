@@ -260,7 +260,7 @@ struct StartScreenView: View {
             
             // Hebrew letters animation
             HStack(spacing: 15) {
-                ForEach(["א", "ב", "ג", "ד", "ה"], id: \.self) { letter in
+                ForEach(["ה", "ד", "ג", "ב", "א"], id: \.self) { letter in
                     Text(letter)
                         .font(.system(size: 48, weight: .bold))
                         .foregroundColor(.white)
