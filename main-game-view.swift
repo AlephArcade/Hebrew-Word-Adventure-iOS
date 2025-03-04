@@ -2,7 +2,6 @@ import SwiftUI
 
 struct MainGameView: View {
     @ObservedObject var gameState: GameState
-    @State private var animateCorrect = false
     @State private var showConfetti = false
     
     // Access data and audio managers
@@ -143,6 +142,11 @@ struct MainGameView: View {
                             selectionOrder: gameState.selectedLetters.firstIndex(of: index).map { $0 + 1 },
                             animatingCorrect: gameState.animatingCorrect && gameState.selectedLetters.contains(index),
                             onTap: {
+                                if !gameState.selectedLetters.contains(index) {
+                                    // Play sound effect when selecting a letter
+                                    AudioManager.shared.playLetterSelectSound()
+                                    HapticManager.shared.selection()
+                                }
                                 gameState.handleLetterSelect(index: index)
                             }
                         )
@@ -156,7 +160,8 @@ struct MainGameView: View {
                     ForEach(0..<(gameState.currentWord?.hebrew.count ?? 0), id: \.self) { index in
                         AnswerSlotView(
                             letter: index < gameState.selectedLetters.count ? gameState.shuffledLetters[gameState.selectedLetters[index]] : "",
-                            isCorrect: gameState.animatingCorrect
+                            isCorrect: gameState.animatingCorrect,
+                            index: index
                         )
                     }
                 }
@@ -167,6 +172,8 @@ struct MainGameView: View {
                 HStack(spacing: 20) {
                     // Reset button
                     Button(action: {
+                        AudioManager.shared.playButtonTapSound()
+                        HapticManager.shared.mediumImpact()
                         gameState.resetSelection()
                     }) {
                         Image(systemName: "arrow.triangle.2.circlepath")
@@ -176,10 +183,14 @@ struct MainGameView: View {
                             .background(Circle().stroke(Color.white, lineWidth: 2))
                     }
                     .disabled(gameState.animatingCorrect)
+                    .opacity(gameState.animatingCorrect ? 0.5 : 1)
                     
                     // Hint button
                     Button(action: {
+                        AudioManager.shared.playHintSound()
+                        HapticManager.shared.warning()
                         gameState.getHint()
+                        GameDataManager.shared.recordHintUsed()
                     }) {
                         ZStack {
                             Circle()
@@ -198,7 +209,7 @@ struct MainGameView: View {
                         }
                     }
                     .disabled(gameState.hintsRemaining <= 0 || gameState.animatingCorrect)
-                    .opacity(gameState.hintsRemaining <= 0 ? 0.5 : 1)
+                    .opacity(gameState.hintsRemaining <= 0 || gameState.animatingCorrect ? 0.5 : 1)
                 }
                 .padding(.bottom)
                 
@@ -216,10 +227,19 @@ struct MainGameView: View {
             }
             .padding()
         }
+        .confetti(isPresented: $showConfetti)
+        .onChange(of: gameState.animatingCorrect) { oldValue, newValue in
+            if newValue && !oldValue {
+                // Trigger confetti when a word is completed correctly
+                showConfetti = true
+                AudioManager.shared.playCorrectAnswerSound()
+                HapticManager.shared.success()
+            }
+        }
     }
 }
 
-// Letter Tile Component
+// Enhanced Letter Tile View with better animations
 struct LetterTileView: View {
     let letter: String
     let isSelected: Bool
@@ -227,17 +247,21 @@ struct LetterTileView: View {
     let animatingCorrect: Bool
     let onTap: () -> Void
     
+    @State private var animationAmount: CGFloat = 1.0
+    
     var body: some View {
         Button(action: onTap) {
             ZStack {
+                // Tile background
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(isSelected ? Color.green : Color.white)
+                    .fill(isSelected ? Color.green : Color(red: 1, green: 0.97, blue: 0.88)) // FFF8E1 in HTML
                     .shadow(radius: 2)
                     .aspectRatio(1, contentMode: .fit)
                 
+                // Letter text
                 Text(letter)
                     .font(.system(size: 32, weight: .bold))
-                    .foregroundColor(isSelected ? .white : .black)
+                    .foregroundColor(isSelected ? .white : Color(red: 0.06, green: 0.08, blue: 0.10)) // 0F1419 in HTML
                 
                 // Selection order indicator
                 if let order = selectionOrder {
@@ -249,14 +273,27 @@ struct LetterTileView: View {
                         .background(Circle().fill(Color.black.opacity(0.6)))
                         .position(x: 60, y: 20)
                 }
-                
-                // Correct animation overlay
-                if animatingCorrect {
-                    Circle()
-                        .fill(Color.yellow.opacity(0.5))
-                        .scaleEffect(2)
-                        .opacity(0.8)
-                        .animation(Animation.easeInOut(duration: 0.5).repeatCount(3, autoreverses: true), value: animatingCorrect)
+            }
+            // Correct answer animation - similar to HTML version
+            .scaleEffect(animatingCorrect && isSelected ? animationAmount : 1)
+            .animation(
+                animatingCorrect && isSelected ?
+                    Animation.easeInOut(duration: 0.5)
+                        .repeatCount(3, autoreverses: true) :
+                    nil,
+                value: animatingCorrect
+            )
+            .onChange(of: animatingCorrect) { oldValue, newValue in
+                if newValue && !oldValue && isSelected {
+                    // Start the pulse animation
+                    withAnimation(Animation.easeInOut(duration: 0.5).repeatCount(3, autoreverses: true)) {
+                        animationAmount = 1.1
+                    }
+                    
+                    // Reset the animation after it's done
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        animationAmount = 1.0
+                    }
                 }
             }
         }
@@ -264,10 +301,14 @@ struct LetterTileView: View {
     }
 }
 
-// Answer Slot Component
+// Enhanced Answer Slot View with staggered animations
 struct AnswerSlotView: View {
     let letter: String
     let isCorrect: Bool
+    let index: Int
+    
+    @State private var animationAmount: CGFloat = 1.0
+    @State private var hasAnimated: Bool = false
     
     var body: some View {
         ZStack {
@@ -279,6 +320,26 @@ struct AnswerSlotView: View {
                 .font(.system(size: 28, weight: .bold))
                 .foregroundColor(.white)
         }
-        .animation(.easeInOut, value: isCorrect)
+        // Use scaleEffect for animation
+        .scaleEffect(animationAmount)
+        .onChange(of: isCorrect) { oldValue, newValue in
+            if newValue && !hasAnimated {
+                // Add staggered animation delay based on index
+                DispatchQueue.main.asyncAfter(deadline: .now() + Double(index) * 0.15) {
+                    // Start the pulse animation
+                    withAnimation(Animation.easeInOut(duration: 0.5).repeatCount(1, autoreverses: true)) {
+                        animationAmount = 1.1
+                    }
+                    
+                    // Reset the animation after it's done
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        animationAmount = 1.0
+                        hasAnimated = true
+                    }
+                }
+            } else if !newValue {
+                hasAnimated = false
+            }
+        }
     }
 }
