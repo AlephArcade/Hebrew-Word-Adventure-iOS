@@ -19,6 +19,7 @@ struct DictionaryView: View {
                         .padding(8)
                         .background(Color(.systemGray6))
                         .cornerRadius(8)
+                        .accessibility(label: Text("Search Hebrew words"))
                     
                     if !searchText.isEmpty {
                         Button(action: {
@@ -27,6 +28,7 @@ struct DictionaryView: View {
                             Image(systemName: "xmark.circle.fill")
                                 .foregroundColor(.gray)
                         }
+                        .accessibility(label: Text("Clear search"))
                     }
                 }
                 .padding(.horizontal)
@@ -45,6 +47,8 @@ struct DictionaryView: View {
                                 .foregroundColor(selectedLevel == nil ? .white : .primary)
                                 .cornerRadius(15)
                         }
+                        .accessibility(label: Text("Show all levels"))
+                        .accessibility(addTraits: selectedLevel == nil ? .isSelected : [])
                         
                         ForEach(1...6, id: \.self) { level in
                             Button(action: {
@@ -58,6 +62,9 @@ struct DictionaryView: View {
                                     .foregroundColor(selectedLevel == level ? .white : .primary)
                                     .cornerRadius(15)
                             }
+                            .accessibility(label: Text("Show level \(level) words"))
+                            .accessibility(addTraits: selectedLevel == level ? .isSelected : [])
+                            .accessibility(hint: Text("Words with \(level + 1) letters"))
                         }
                     }
                     .padding(.horizontal)
@@ -71,6 +78,7 @@ struct DictionaryView: View {
                     .foregroundColor(.gray)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal)
+                    .accessibility(label: Text("\(filteredWords.count) words found"))
                 
                 // Words list
                 if filteredWords.isEmpty {
@@ -87,6 +95,8 @@ struct DictionaryView: View {
                 }
             }
         }
+        // Set RTL for dictionary content
+        .environment(\.layoutDirection, .rightToLeft)
     }
     
     private var emptyStateView: some View {
@@ -94,6 +104,7 @@ struct DictionaryView: View {
             Image(systemName: "book.closed")
                 .font(.system(size: 60))
                 .foregroundColor(.gray)
+                .accessibility(hidden: true)
             
             if dataManager.learnedWords.isEmpty {
                 Text("Your dictionary is empty")
@@ -116,20 +127,28 @@ struct DictionaryView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibility(label: dataManager.learnedWords.isEmpty ? 
+                      Text("Dictionary is empty. Complete words in the game to add them") : 
+                      Text("No words match your search criteria"))
     }
     
     private func wordsList(words: [Word]) -> some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 15) {
-            ForEach(words) { word in
-                WordCardView(word: word)
-                    .onTapGesture {
-                        HapticManager.shared.selection()
-                        selectedWord = word
-                        showingWordDetail = true
-                    }
+        ScrollView {
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 15) {
+                ForEach(words) { word in
+                    WordCardView(word: word)
+                        .onTapGesture {
+                            HapticManager.shared.selection()
+                            selectedWord = word
+                            showingWordDetail = true
+                        }
+                        .accessibilityElement(children: .combine)
+                        .accessibility(label: Text("\(word.hebrew), meaning \(word.meaning)"))
+                        .accessibility(hint: Text("Tap to view details"))
+                }
             }
+            .padding()
         }
-        .padding()
     }
 }
 
@@ -168,6 +187,9 @@ struct WordDetailView: View {
     @State private var isPronouncing = false
     @Environment(\.presentationMode) var presentationMode
     
+    // State for voice synthesis
+    @State private var synthesizer = AVSpeechSynthesizer()
+    
     var body: some View {
         VStack(spacing: 30) {
             // Close button
@@ -179,6 +201,7 @@ struct WordDetailView: View {
                         .font(.title)
                         .foregroundColor(.gray)
                 }
+                .accessibility(label: Text("Close"))
                 
                 Spacer()
             }
@@ -192,12 +215,14 @@ struct WordDetailView: View {
                 .foregroundColor(.primary)
                 .padding()
                 .animation(.easeInOut, value: showingTransliteration)
+                .accessibility(label: Text("Hebrew word: \(word.hebrew)"))
             
             // Meaning
             Text(word.meaning)
                 .font(.title3)
                 .foregroundColor(.secondary)
                 .padding()
+                .accessibility(label: Text("Meaning: \(word.meaning)"))
             
             // Transliteration with toggle
             VStack {
@@ -217,6 +242,8 @@ struct WordDetailView: View {
                     .background(Color(.secondarySystemBackground))
                     .cornerRadius(10)
                 }
+                .accessibility(label: Text("Show transliteration"))
+                .accessibility(hint: Text(showingTransliteration ? "Tap to hide" : "Tap to show"))
                 
                 if showingTransliteration {
                     Text(word.transliteration)
@@ -224,6 +251,7 @@ struct WordDetailView: View {
                         .italic()
                         .padding()
                         .transition(.move(edge: .top).combined(with: .opacity))
+                        .accessibility(label: Text("Transliteration: \(word.transliteration)"))
                 }
             }
             .padding(.horizontal)
@@ -231,13 +259,7 @@ struct WordDetailView: View {
             // Pronunciation button
             Button(action: {
                 HapticManager.shared.mediumImpact()
-                isPronouncing = true
-                
-                // Here you would integrate with a pronunciation service
-                // For now, we'll just simulate the effect
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                    isPronouncing = false
-                }
+                pronounceWord()
             }) {
                 HStack {
                     Image(systemName: isPronouncing ? "speaker.wave.3.fill" : "speaker.wave.2")
@@ -254,6 +276,7 @@ struct WordDetailView: View {
                 .shadow(radius: 3)
             }
             .disabled(isPronouncing)
+            .accessibility(label: Text(isPronouncing ? "Currently pronouncing" : "Pronounce word"))
             
             Spacer()
             
@@ -263,8 +286,33 @@ struct WordDetailView: View {
             Spacer()
         }
         .padding()
+        .environment(\.layoutDirection, .rightToLeft)
+        .onDisappear {
+            // Clean up synthesizer if needed
+            cleanupSynthesizer()
+        }
+    }
+    
+    private func pronounceWord() {
+        // Actual implementation would use AVSpeechSynthesizer
+        // This is a simplified version
+        isPronouncing = true
+        
+        // Simulate pronunciation
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            isPronouncing = false
+        }
+    }
+    
+    private func cleanupSynthesizer() {
+        if synthesizer.isSpeaking {
+            synthesizer.stopSpeaking(at: .immediate)
+        }
     }
 }
+
+// Add AVSpeechSynthesizer import at the top of the file
+import AVFoundation
 
 // Preview
 struct DictionaryView_Previews: PreviewProvider {
