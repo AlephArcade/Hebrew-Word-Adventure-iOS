@@ -1,341 +1,218 @@
 import SwiftUI
 
-/// An enhanced confetti animation view inspired by iMessage celebrations
-struct ConfettiView: View {
-    // Initial setup
-    @State private var particles: [ConfettiParticle] = []
+/// A modern confetti view inspired by SimonBachmann's ConfettiSwiftUI
+struct ImprovedConfettiView: View {
+    // Configuration
+    private let particleCount: Int
+    private let colors: [Color]
+    private let shapes: [ConfettiShape]
+    private let confettiSize: CGFloat
+    private let rainHeight: CGFloat
+    private let opacity: Double
+    private let openingAngle: Angle
+    private let closingAngle: Angle
+    private let radius: CGFloat
+    
+    // Animation state
     @State private var isAnimating = false
     
-    // For cleanup
-    @State private var animationTask: DispatchWorkItem?
-    
-    // Color palette similar to HTML version
-    private let colors: [Color] = [
-        Color(red: 1.0, green: 0.85, blue: 0.35), // FFEB3B yellowish
-        Color(red: 0.3, green: 0.69, blue: 0.31), // 4CAF50 greenish
-        Color(red: 0.13, green: 0.59, blue: 0.95), // 2196F3 blueish
-        Color(red: 0.91, green: 0.12, blue: 0.39), // E91E63 pinkish
-        Color(red: 0.61, green: 0.15, blue: 0.69)  // 9C27B0 purplish
-    ]
-    
-    // Different confetti shapes
-    private let shapes: [ConfettiShape] = [.circle, .triangle, .square, .star]
+    init(
+        particleCount: Int = 40,
+        colors: [Color] = [.blue, .red, .green, .yellow, .pink, .purple, .orange],
+        shapes: [ConfettiShape] = [.circle, .triangle, .square, .slimRectangle, .roundedCross],
+        confettiSize: CGFloat = 10.0,
+        rainHeight: CGFloat = 600.0,
+        opacity: Double = 1.0,
+        openingAngle: Angle = .degrees(60),
+        closingAngle: Angle = .degrees(120),
+        radius: CGFloat = 300
+    ) {
+        self.particleCount = particleCount
+        self.colors = colors
+        self.shapes = shapes
+        self.confettiSize = confettiSize
+        self.rainHeight = rainHeight
+        self.opacity = opacity
+        self.openingAngle = openingAngle
+        self.closingAngle = closingAngle
+        self.radius = radius
+    }
     
     var body: some View {
         ZStack {
-            // Render each confetti particle
-            ForEach(particles) { particle in
-                particle.view
-                    .position(x: particle.position.x, y: particle.position.y)
-                    .rotationEffect(.degrees(particle.rotation))
-                    .opacity(particle.opacity)
-                    .scaleEffect(particle.scale)
+            ForEach(0..<particleCount, id: \.self) { index in
+                ConfettiParticleView(
+                    shape: shapes[index % shapes.count],
+                    color: colors[index % colors.count],
+                    size: confettiSize,
+                    openingAngle: openingAngle,
+                    closingAngle: closingAngle,
+                    radius: radius,
+                    rainHeight: rainHeight,
+                    opacity: opacity,
+                    isAnimating: isAnimating
+                )
             }
         }
         .onAppear {
-            // Generate confetti when view appears
-            generateConfetti()
-        }
-        .onDisappear {
-            // Proper cleanup when view disappears
-            cleanupAnimations()
-        }
-    }
-    
-// Similarly update generateConfetti function
-    private func generateConfetti() {
-        // Cancel any previous animation task
-        cleanupAnimations()
-        
-        var newParticles: [ConfettiParticle] = []
-        
-        // Create particles for a more dramatic effect
-        let particleCount = UIDevice.current.userInterfaceIdiom == .pad ? 150 : 100
-        
-        // Create falling confetti (top to bottom)
-        for _ in 0..<particleCount/2 {
-            createFallingParticle(particles: &newParticles)
-        }
-        
-        // Create shooting confetti (bottom to top then fall)
-        for _ in 0..<particleCount/2 {
-            createShootingParticle(particles: &newParticles)
-        }
-        
-        self.particles = newParticles
-        self.isAnimating = true
-        
-        // Create a new animation task - capturing self as constant
-        DispatchQueue.main.async { [self] in
-            animateParticles()
-        }
-    }
-
-
-    // Update createFallingParticle to match JavaScript version:
-    private func createFallingParticle(particles: inout [ConfettiParticle]) {
-        // Randomize properties for each particle
-        let shape = shapes.randomElement() ?? .circle
-        let color = colors.randomElement() ?? .yellow
-        
-        // Size varies based on shape
-        let size = CGFloat.random(in: 5...20)
-        
-        // Start position is from top of screen at random x coordinate
-        let screenWidth = UIScreen.main.bounds.width
-        let screenHeight = UIScreen.main.bounds.height
-        let startX = CGFloat.random(in: 0...screenWidth)
-        let startY = CGFloat.random(in: -100...0) // Start above screen
-        
-        // End position is somewhere toward bottom of screen
-        // Add more horizontal movement to match JavaScript
-        let endX = startX + CGFloat.random(in: -screenWidth/2...screenWidth/2)
-        let endY = screenHeight + CGFloat.random(in: 0...100)
-        
-        // Random rotation speed matching JavaScript
-        let rotationSpeed = Double.random(in: -720...720)
-        
-        // Create the particle
-        let particle = ConfettiParticle(
-            shape: shape,
-            color: color,
-            size: size,
-            position: CGPoint(x: startX, y: startY),
-            finalPosition: CGPoint(x: endX, y: endY),
-            rotation: Double.random(in: 0...360),
-            rotationSpeed: rotationSpeed,
-            scale: 1.0,
-            particleType: .falling
-        )
-        
-        particles.append(particle)
-    }
-
-    
-    private func createShootingParticle(particles: inout [ConfettiParticle]) {
-        // Randomize properties for each particle
-        let shape = shapes.randomElement() ?? .circle
-        let color = colors.randomElement() ?? .yellow
-        
-        // Size varies based on shape
-        let size = CGFloat.random(in: 5...20)
-        
-        // Start position is from bottom of screen at random x coordinate
-        let screenWidth = UIScreen.main.bounds.width
-        let screenHeight = UIScreen.main.bounds.height
-        let startX = CGFloat.random(in: 0...screenWidth)
-        let startY = screenHeight + CGFloat.random(in: 0...50) // Start below screen
-        
-        // First shoot up to a peak height
-        let peakY = CGFloat.random(in: screenHeight * 0.1...screenHeight * 0.5)
-        let peakX = startX + CGFloat.random(in: -screenWidth/3...screenWidth/3)
-        
-        // Then fall down to somewhere below screen
-        let endY = screenHeight + CGFloat.random(in: 0...100)
-        let endX = peakX + CGFloat.random(in: -screenWidth/4...screenWidth/4)
-        
-        // Create the particle
-        let particle = ConfettiParticle(
-            shape: shape,
-            color: color,
-            size: size,
-            position: CGPoint(x: startX, y: startY),
-            finalPosition: CGPoint(x: endX, y: endY),
-            intermediatePosition: CGPoint(x: peakX, y: peakY),
-            rotation: Double.random(in: 0...360),
-            rotationSpeed: Double.random(in: -720...720),
-            scale: 1.0,
-            particleType: .shooting
-        )
-        
-        particles.append(particle)
-    }
-    
-// Correct version using [self] with let constant
-    private func animateParticles() {
-        // Process particles in smaller batches to prevent animation freezing
-        let batchSize = 20
-        let totalBatches = (particles.count + batchSize - 1) / batchSize
-        
-        for batchIndex in 0..<totalBatches {
-            let startIndex = batchIndex * batchSize
-            let endIndex = min(startIndex + batchSize, particles.count)
-            
-            // Process this batch with a slight delay to spread the animation load
-            // Using explicit [self] to capture as constant
-            DispatchQueue.main.asyncAfter(deadline: .now() + Double(batchIndex) * 0.05) { [self] in
-                for i in startIndex..<endIndex {
-                    if i >= particles.count { continue } // Safety check
-                    
-                    let particle = particles[i]
-                    let delay = Double.random(in: 0...0.3) // Reduced max delay
-                    
-                    switch particle.particleType {
-                    case .falling:
-                        animateFallingParticle(index: i, delay: delay)
-                    case .shooting:
-                        animateShootingParticle(index: i, delay: delay)
-                    }
-                }
+            // Start the animation as soon as the view appears
+            DispatchQueue.main.async {
+                isAnimating = true
             }
         }
-        
-        // Clean up particles after animation completes
-        // Store a reference to avoid capturing self
-        DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) { [self] in
-            cleanupAnimations()
-        }
-    }
-
-
-    
-    private func animateFallingParticle(index: Int, delay: Double) {
-        let duration = Double.random(in: 2.0...4.0)
-        
-        // Position animation
-        withAnimation(Animation.easeOut(duration: duration).delay(delay)) {
-            if index < particles.count {
-                particles[index].position = particles[index].finalPosition
-                particles[index].rotation += particles[index].rotationSpeed
-            }
-        }
-        
-        // Scale animation (pulsing effect)
-        withAnimation(Animation.easeInOut(duration: 0.5).repeatForever().delay(delay)) {
-            if index < particles.count {
-                particles[index].scale = CGFloat.random(in: 0.8...1.2)
-            }
-        }
-        
-        // Fade out animation
-        withAnimation(Animation.linear(duration: 0.7).delay(duration * 0.8)) {
-            if index < particles.count {
-                particles[index].opacity = 0
-            }
-        }
-    }
-    
-    private func animateShootingParticle(index: Int, delay: Double) {
-        if index >= particles.count { return }
-        
-        let particle = particles[index]
-        guard let intermediatePosition = particle.intermediatePosition else { return }
-        
-        // First phase: shoot up 
-        let riseTime = Double.random(in: 0.5...1.2)
-        withAnimation(Animation.easeOut(duration: riseTime).delay(delay)) {
-            if index < particles.count {
-                particles[index].position = intermediatePosition
-                particles[index].rotation += particles[index].rotationSpeed * 0.5
-                // Get bigger while rising
-                particles[index].scale = 1.5
-            }
-        }
-        
-        // Second phase: fall down
-        let fallTime = Double.random(in: 1.5...3.0)
-        withAnimation(Animation.easeIn(duration: fallTime).delay(delay + riseTime)) {
-            if index < particles.count {
-                particles[index].position = particle.finalPosition
-                particles[index].rotation += particles[index].rotationSpeed
-            }
-        }
-        
-        // Scale animation during fall (pulsing effect)
-        withAnimation(Animation.easeInOut(duration: 0.3).repeatForever().delay(delay + riseTime)) {
-            if index < particles.count {
-                particles[index].scale = CGFloat.random(in: 0.7...1.3)
-            }
-        }
-        
-        // Fade out animation
-        withAnimation(Animation.linear(duration: 0.7).delay(delay + riseTime + fallTime * 0.7)) {
-            if index < particles.count {
-                particles[index].opacity = 0
-            }
-        }
-    }
-    
-    private func cleanupAnimations() {
-        // Cancel any pending animation tasks
-        animationTask?.cancel()
-        animationTask = nil
-        
-        // Clear particles
-        particles = []
-        isAnimating = false
     }
 }
 
-/// Individual confetti particle with enhanced structure
-struct ConfettiParticle: Identifiable {
-    let id = UUID()
+/// Individual confetti particle
+struct ConfettiParticleView: View {
     let shape: ConfettiShape
     let color: Color
     let size: CGFloat
+    let openingAngle: Angle
+    let closingAngle: Angle
+    let radius: CGFloat
+    let rainHeight: CGFloat
+    let opacity: Double
+    let isAnimating: Bool
     
-    var position: CGPoint
-    let finalPosition: CGPoint
-    let intermediatePosition: CGPoint?
-    var rotation: Double
-    let rotationSpeed: Double
-    var opacity: Double = 1.0
-    var scale: CGFloat = 1.0
-    let particleType: ParticleType
+    // Animation state
+    @State private var location = CGPoint.zero
+    @State private var particleOpacity = 0.0
+    @State private var rotation3DX = 0.0
+    @State private var rotation3DZ = 0.0
     
-    init(shape: ConfettiShape, color: Color, size: CGFloat, position: CGPoint, finalPosition: CGPoint, 
-         intermediatePosition: CGPoint? = nil, rotation: Double, rotationSpeed: Double, 
-         scale: CGFloat = 1.0, particleType: ParticleType) {
+    // Randomized values for varied animation
+    private let spinDirectionX: Double
+    private let spinDirectionZ: Double
+    private let rotationSpeed: Double
+    private let rotationSpeedZ: Double
+    private let randomAnchor: CGFloat
+    
+    // Task for proper cancellation
+    @State private var rainAnimationTask: DispatchWorkItem?
+    
+    init(
+        shape: ConfettiShape,
+        color: Color,
+        size: CGFloat,
+        openingAngle: Angle,
+        closingAngle: Angle,
+        radius: CGFloat,
+        rainHeight: CGFloat,
+        opacity: Double,
+        isAnimating: Bool
+    ) {
         self.shape = shape
         self.color = color
         self.size = size
-        self.position = position
-        self.finalPosition = finalPosition
-        self.intermediatePosition = intermediatePosition
-        self.rotation = rotation
-        self.rotationSpeed = rotationSpeed
-        self.scale = scale
-        self.particleType = particleType
+        self.openingAngle = openingAngle
+        self.closingAngle = closingAngle
+        self.radius = radius
+        self.rainHeight = rainHeight
+        self.opacity = opacity
+        self.isAnimating = isAnimating
+        
+        // Initialize random values during init to avoid @State vars that never change
+        self.spinDirectionX = Double.random(in: -1...1) > 0 ? 1.0 : -1.0
+        self.spinDirectionZ = Double.random(in: -1...1) > 0 ? 1.0 : -1.0
+        self.rotationSpeed = Double.random(in: 1.0...3.0)
+        self.rotationSpeedZ = Double.random(in: 1.0...3.0)
+        self.randomAnchor = CGFloat.random(in: 0...1).rounded()
     }
     
-    var view: some View {
-        Group {
-            switch shape {
-            case .circle:
-                Circle()
-                    .fill(color)
-                    .frame(width: size, height: size)
-            case .triangle:
-                Triangle()
-                    .fill(color)
-                    .frame(width: size, height: size)
-            case .square:
-                Rectangle()
-                    .fill(color)
-                    .frame(width: size, height: size)
-            case .star:
-                Star(points: 5, innerRatio: 0.5)
-                    .fill(color)
-                    .frame(width: size, height: size)
+    var body: some View {
+        confettiShapeView
+            .frame(width: size, height: size)
+            .foregroundColor(color)
+            .opacity(particleOpacity)
+            .position(location)
+            .rotation3DEffect(.degrees(rotation3DX), axis: (x: spinDirectionX, y: 0, z: 0))
+            .rotation3DEffect(.degrees(rotation3DZ), axis: (x: 0, y: 0, z: spinDirectionZ), anchor: UnitPoint(x: randomAnchor, y: randomAnchor))
+            .onChange(of: isAnimating) { startAnimation in
+                if startAnimation {
+                    // Trigger the animation sequence
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                        particleOpacity = opacity
+                        
+                        // Calculate random angle for explosion direction
+                        let minAngle = CGFloat(openingAngle.degrees)
+                        let maxAngle = CGFloat(closingAngle.degrees)
+                        let randomAngle: CGFloat
+                        
+                        if minAngle <= maxAngle {
+                            randomAngle = CGFloat.random(in: minAngle...maxAngle)
+                        } else {
+                            // Handle wrap-around case (e.g., 330° to 30°)
+                            randomAngle = CGFloat.random(in: minAngle...(maxAngle + 360)).truncatingRemainder(dividingBy: 360)
+                        }
+                        
+                        // Calculate random distance for explosion radius
+                        let distance = pow(CGFloat.random(in: 0.01...1), 2.0/7.0) * radius
+                        
+                        // Calculate position using angle and distance
+                        location.x = distance * cos(deg2rad(randomAngle))
+                        location.y = -distance * sin(deg2rad(randomAngle))
+                        
+                        // Start 3D rotation immediately
+                        rotation3DX = 360 * rotationSpeed
+                        rotation3DZ = 360 * rotationSpeedZ
+                    }
+                    
+                    // Cancel any existing delayed tasks
+                    rainAnimationTask?.cancel()
+                    
+                    // Create a new task for rain animation
+                    let task = DispatchWorkItem { [self] in
+                        withAnimation(.timingCurve(0.12, 0, 0.39, 0, duration: Double(rainHeight / 300))) {
+                            location.y += rainHeight
+                            particleOpacity = 0
+                        }
+                    }
+                    rainAnimationTask = task
+                    
+                    // Schedule the rain animation
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: task)
+                }
             }
+            .onDisappear {
+                // Clean up any pending tasks
+                rainAnimationTask?.cancel()
+                rainAnimationTask = nil
+            }
+    }
+    
+    private func deg2rad(_ number: CGFloat) -> CGFloat {
+        return number * CGFloat.pi / 180
+    }
+    
+    @ViewBuilder
+    private var confettiShapeView: some View {
+        switch shape {
+        case .circle:
+            Circle()
+        case .triangle:
+            Triangle()
+        case .square:
+            Rectangle()
+        case .slimRectangle:
+            Rectangle()
+                .frame(width: size, height: size / 3)
+        case .roundedCross:
+            RoundedCross()
         }
     }
 }
 
-enum ParticleType {
-    case falling
-    case shooting
-}
+// MARK: - Shape Definitions
 
-/// Available confetti shapes (extended)
 enum ConfettiShape {
     case circle
     case triangle
     case square
-    case star
+    case slimRectangle
+    case roundedCross
 }
 
-/// Custom triangle shape
 struct Triangle: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
@@ -347,32 +224,36 @@ struct Triangle: Shape {
     }
 }
 
-/// Custom star shape
-struct Star: Shape {
-    let points: Int
-    let innerRatio: CGFloat
-    
+struct RoundedCross: Shape {
     func path(in rect: CGRect) -> Path {
-        let center = CGPoint(x: rect.width / 2, y: rect.height / 2)
-        let outerRadius = min(rect.width, rect.height) / 2
-        let innerRadius = outerRadius * innerRatio
+        let width = min(rect.width, rect.height)
+        let halfWidth = width / 2
+        let quarterWidth = width / 4
         
         var path = Path()
-        let angleIncrement = .pi * 2 / CGFloat(points * 2)
         
-        for i in 0..<(points * 2) {
-            let radius = i.isMultiple(of: 2) ? outerRadius : innerRadius
-            let angle = CGFloat(i) * angleIncrement - .pi / 2
-            let x = center.x + radius * cos(angle)
-            let y = center.y + radius * sin(angle)
-            
-            if i == 0 {
-                path.move(to: CGPoint(x: x, y: y))
-            } else {
-                path.addLine(to: CGPoint(x: x, y: y))
-            }
-        }
-        path.closeSubpath()
+        // Vertical bar
+        path.addRoundedRect(
+            in: CGRect(
+                x: halfWidth - quarterWidth,
+                y: 0,
+                width: halfWidth,
+                height: width
+            ),
+            cornerSize: CGSize(width: quarterWidth, height: quarterWidth)
+        )
+        
+        // Horizontal bar
+        path.addRoundedRect(
+            in: CGRect(
+                x: 0,
+                y: halfWidth - quarterWidth,
+                width: width,
+                height: halfWidth
+            ),
+            cornerSize: CGSize(width: quarterWidth, height: quarterWidth)
+        )
+        
         return path
     }
 }
