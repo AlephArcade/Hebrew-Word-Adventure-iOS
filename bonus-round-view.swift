@@ -36,8 +36,8 @@ struct BonusRoundView: View {
                             .font(.headline)
                             .foregroundColor(.white)
                     }
-                    .onChange(of: gameState.bonusTimeRemaining) { time in
-                        if time <= 3 && time > 0 {
+                    .onChange(of: gameState.bonusTimeRemaining) { oldValue, newValue in
+                        if newValue <= 3 && newValue > 0 {
                             // Play a ticking sound for last few seconds
                             AudioManager.shared.playButtonTapSound()
                             HapticManager.shared.selection()
