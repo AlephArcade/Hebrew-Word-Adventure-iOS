@@ -9,9 +9,6 @@ struct MainGameView: View {
     @ObservedObject private var dataManager = GameDataManager.shared
     @ObservedObject private var audioManager = AudioManager.shared
     
-    // Timer reference for proper cleanup
-    @State private var animationTimer: Timer?
-    
     // Helper function to determine grid columns based on level
     private func gridColumns() -> [GridItem] {
         let columns: Int
@@ -72,7 +69,7 @@ struct MainGameView: View {
                     
                     Spacer()
                     
-                    // Lives (hearts) - removed the "LIVES" text as requested
+                    // Lives (hearts) - removed the "LIVES" text
                     VStack {
                         HStack(spacing: 2) {
                             ForEach(0..<(gameState.maxLives/2), id: \.self) { index in
@@ -256,60 +253,54 @@ struct MainGameView: View {
             
             // Add confetti overlay
             if showConfetti {
-                ConfettiView()
-                    .ignoresSafeArea()
-                    .allowsHitTesting(false)
+                ImprovedConfettiView(
+                    particleCount: 50,
+                    colors: [
+                        Color(red: 1.0, green: 0.85, blue: 0.35), // Yellowish
+                        Color(red: 0.3, green: 0.69, blue: 0.31), // Greenish
+                        Color(red: 0.13, green: 0.59, blue: 0.95), // Blueish
+                        Color(red: 0.91, green: 0.12, blue: 0.39), // Pinkish
+                        Color(red: 0.61, green: 0.15, blue: 0.69)  // Purplish
+                    ],
+                    confettiSize: 12,
+                    rainHeight: UIScreen.main.bounds.height * 1.2
+                )
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
             }
         }
         .onAppear {
-            // Check for changes in animatingCorrect state
-            setupAnimationTimer()
+            // Reset animation state on view appear
+            previousAnimatingCorrect = false
+            showConfetti = false
         }
-        .onDisappear {
-            // Clean up timer resources
-            cleanupAnimationTimer()
-        }
-        // Force update the view when game state changes
-        .id("game-view-\(gameState.animatingCorrect)-\(gameState.animatingIncorrect)-\(gameState.score)")
-        // Apply RTL for entire Hebrew-language game UI
-        .environment(\.layoutDirection, .rightToLeft)
-    }
-    
-    // This function handles the confetti animation by watching for state changes
-    private func setupAnimationTimer() {
-        // Clean up existing timer if any
-        cleanupAnimationTimer()
-        
-        // Create a new timer
-        animationTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [self] _ in
-            // Show confetti whenever animatingCorrect becomes true
-            if gameState.animatingCorrect && !previousAnimatingCorrect {
+        .onChange(of: gameState.animatingCorrect) { newValue in
+            // Handle correct animation state change
+            if newValue && !previousAnimatingCorrect {
                 previousAnimatingCorrect = true
                 showConfetti = true
                 AudioManager.shared.playCorrectAnswerSound()
                 HapticManager.shared.success()
                 
                 // Hide confetti after animation completes
-                DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+                    guard let self = self else { return }
                     self.showConfetti = false
                 }
-            } else if !gameState.animatingCorrect && previousAnimatingCorrect {
+            } else if !newValue && previousAnimatingCorrect {
                 // Reset the flag when animation ends
                 previousAnimatingCorrect = false
             }
         }
-        
-        // Add to run loop
-        if let timer = animationTimer {
-            RunLoop.current.add(timer, forMode: .common)
+        .onDisappear {
+            // Clean up when view disappears
+            showConfetti = false
+            previousAnimatingCorrect = false
         }
-    }
-
-    
-    // Clean up timer resources
-    private func cleanupAnimationTimer() {
-        animationTimer?.invalidate()
-        animationTimer = nil
+        // Force update the view when game state changes
+        .id("game-view-\(gameState.animatingCorrect)-\(gameState.animatingIncorrect)-\(gameState.score)")
+        // Apply RTL for entire Hebrew-language game UI
+        .environment(\.layoutDirection, .rightToLeft)
     }
 }
 
@@ -358,10 +349,10 @@ struct LetterTileView: View {
         .onAppear {
             setupTileAnimation()
         }
-        .onChange(of: animatingCorrect) {
+        .onChange(of: animatingCorrect) { newValue in
             setupTileAnimation()
         }
-        .onChange(of: animatingIncorrect) {
+        .onChange(of: animatingIncorrect) { newValue in
             setupTileAnimation()
         }
         // Create a unique ID to force refresh when animation state changes
@@ -403,9 +394,10 @@ struct LetterTileView: View {
             }
             
             // Reset scale animation after completion
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                guard let self = self else { return }
                 withAnimation {
-                    animationAmount = 1.0
+                    self.animationAmount = 1.0
                 }
             }
         }
@@ -418,9 +410,10 @@ struct LetterTileView: View {
             }
             
             // Reset after animation completes
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                guard let self = self else { return }
                 withAnimation {
-                    animationAmount = 1.0
+                    self.animationAmount = 1.0
                 }
             }
         }
@@ -454,10 +447,10 @@ struct AnswerSlotView: View {
         .onAppear {
             setupAnimation()
         }
-        .onChange(of: isCorrect) { _ in
+        .onChange(of: isCorrect) { newValue in
             setupAnimation()
         }
-        .onChange(of: isIncorrect) { _ in
+        .onChange(of: isIncorrect) { newValue in
             setupAnimation()
         }
         // Create a unique ID to force refresh when state changes
@@ -490,16 +483,19 @@ struct AnswerSlotView: View {
             }
             
             // Add staggered animation delay based on index for right-to-left effect
-            DispatchQueue.main.asyncAfter(deadline: .now() + Double(index) * 0.15) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(index) * 0.15) { [weak self] in
+                guard let self = self else { return }
+                
                 // Start animation
                 withAnimation(Animation.easeInOut(duration: 0.5).repeatCount(1, autoreverses: true)) {
-                    animationAmount = 1.1
+                    self.animationAmount = 1.1
                 }
                 
                 // Reset animation
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                    guard let self = self else { return }
                     withAnimation {
-                        animationAmount = 1.0
+                        self.animationAmount = 1.0
                     }
                 }
             }
@@ -510,9 +506,10 @@ struct AnswerSlotView: View {
             }
             
             // Reset after animation completes
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                guard let self = self else { return }
                 withAnimation {
-                    animationAmount = 1.0
+                    self.animationAmount = 1.0
                 }
             }
         } else {
