@@ -45,21 +45,21 @@ class GameDataManager: ObservableObject {
     // MARK: - UserDefaults Setup
     
     /// Register default values for UserDefaults if they don't exist
-    private func registerDefaultsIfNeeded() {
-        let defaults: [String: Any] = [
-            Keys.highScores: Data(),
-            Keys.learnedWords: Data(),
-            Keys.statistics: try? encoder.encode(GameStatistics()),
-            "audio_muted": false,
-            "audio_volume": 0.8,
-            "haptics_enabled": true,
-            "continue_enabled": true,
-            "logging_enabled": false,
-            "log_to_file": false
-        ]
-        
-        userDefaults.register(defaults: defaults)
-    }
+           private func registerDefaultsIfNeeded() {
+            let defaults: [String: Any] = [
+                Keys.highScores: Data() as Any,
+                Keys.learnedWords: Data() as Any,
+                Keys.statistics: (try? encoder.encode(GameStatistics())) as Any,
+                "audio_muted": false,
+                "audio_volume": 0.8,
+                "haptics_enabled": true,
+                "continue_enabled": true,
+                "logging_enabled": false,
+                "log_to_file": false
+            ]
+            
+            userDefaults.register(defaults: defaults)
+        }
     
     // MARK: - Data Loading
     
