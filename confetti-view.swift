@@ -86,8 +86,8 @@ struct ConfettiView: View {
         self.isAnimating = true
         
         // Create a new animation task
-        let task = DispatchWorkItem { [weak self] in
-            self?.animateParticles()
+        let task = DispatchWorkItem { [self] in
+            animateParticles()
         }
         
         self.animationTask = task
@@ -118,11 +118,10 @@ struct ConfettiView: View {
         }
         
         // Clean up particles after animation completes
-        let cleanupTask = DispatchWorkItem { [weak self] in
-            guard let self = self else { return }
-            if self.isAnimating {
-                self.particles = []
-                self.isAnimating = false
+        let cleanupTask = DispatchWorkItem { [self] in
+            if isAnimating {
+                particles = []
+                isAnimating = false
             }
         }
         
