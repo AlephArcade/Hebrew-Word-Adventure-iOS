@@ -9,6 +9,9 @@ struct MainGameView: View {
     @ObservedObject private var dataManager = GameDataManager.shared
     @ObservedObject private var audioManager = AudioManager.shared
     
+    // Timer reference for proper cleanup
+    @State private var animationTimer: Timer?
+    
     // Helper function to determine grid columns based on level
     private func gridColumns() -> [GridItem] {
         let columns: Int
@@ -50,6 +53,8 @@ struct MainGameView: View {
                                 .foregroundColor(.gray)
                         }
                     }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Level \(gameState.level)")
                     
                     Spacer()
                     
@@ -62,6 +67,8 @@ struct MainGameView: View {
                             .font(.headline)
                             .foregroundColor(.white)
                     }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Score \(gameState.score)")
                     
                     Spacer()
                     
@@ -87,6 +94,8 @@ struct MainGameView: View {
                             }
                         }
                     }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Lives \(gameState.lives) out of \(gameState.maxLives)")
                 }
                 .padding()
                 .background(Color(white: 0.15))
@@ -96,6 +105,7 @@ struct MainGameView: View {
                 ProgressView(value: gameState.currentLevelProgress, total: 100)
                     .progressViewStyle(LinearProgressViewStyle(tint: Color.orange))
                     .padding(.horizontal)
+                    .accessibilityValue("\(Int(gameState.currentLevelProgress))% complete")
                 
                 // Word to find
                 VStack {
@@ -112,6 +122,8 @@ struct MainGameView: View {
                     }
                 }
                 .padding()
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Find the word \(gameState.currentWord?.transliteration ?? ""), meaning \(gameState.currentWord?.meaning ?? "")")
                 
                 // Streak display
                 HStack(spacing: 5) {
@@ -133,6 +145,8 @@ struct MainGameView: View {
                             .offset(x: 5)
                     }
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Streak \(gameState.streak) out of 3. \(gameState.bonusActive ? "Bonus active" : "")")
                 
                 // Letter tiles grid
                 LazyVGrid(columns: gridColumns(), spacing: 10) {
@@ -151,6 +165,8 @@ struct MainGameView: View {
                                 gameState.handleLetterSelect(index: index)
                             }
                         )
+                        .accessibilityLabel("Letter \(letter)\(gameState.selectedLetters.contains(index) ? ", selected" : "")")
+                        .accessibilityHint("Tap to select")
                     }
                 }
                 .padding()
@@ -164,6 +180,7 @@ struct MainGameView: View {
                             isCorrect: gameState.animatingCorrect,
                             index: index
                         )
+                        .accessibilityLabel("Answer slot \(index + 1): \(index < gameState.selectedLetters.count ? gameState.shuffledLetters[gameState.selectedLetters[index]] : "empty")")
                     }
                 }
                 .environment(\.layoutDirection, .rightToLeft) // Hebrew is RTL
@@ -185,6 +202,7 @@ struct MainGameView: View {
                     }
                     .disabled(gameState.animatingCorrect)
                     .opacity(gameState.animatingCorrect ? 0.5 : 1)
+                    .accessibilityLabel("Reset selection")
                     
                     // Hint button
                     Button(action: {
@@ -211,6 +229,7 @@ struct MainGameView: View {
                     }
                     .disabled(gameState.hintsRemaining <= 0 || gameState.animatingCorrect)
                     .opacity(gameState.hintsRemaining <= 0 || gameState.animatingCorrect ? 0.5 : 1)
+                    .accessibilityLabel("Use hint, \(gameState.hintsRemaining) remaining")
                 }
                 .padding(.bottom)
                 
@@ -223,46 +242,66 @@ struct MainGameView: View {
                         .background(Color.black.opacity(0.6))
                         .cornerRadius(10)
                         .animation(.easeInOut, value: gameState.showingMessage)
+                        .accessibilityLabel("Message: \(gameState.message)")
                 }
             }
             .padding()
             
             // Add confetti overlay
             if showConfetti {
-                ConfettiEffectView()
+                ConfettiView()
                     .ignoresSafeArea()
                     .allowsHitTesting(false)
             }
         }
         .onAppear {
             // Check for changes in animatingCorrect state
-            checkForCorrectAnswer()
+            setupAnimationTimer()
+        }
+        .onDisappear {
+            // Clean up timer resources
+            cleanupAnimationTimer()
         }
         // Force update the view when game state changes
         .id("game-view-\(gameState.animatingCorrect)-\(gameState.score)")
+        // Apply RTL for entire Hebrew-language game UI
+        .environment(\.layoutDirection, .rightToLeft)
     }
     
     // This function handles the confetti animation by watching for state changes
-    private func checkForCorrectAnswer() {
-        // Create a timer to check for changes in animatingCorrect
-        let timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
-            if gameState.animatingCorrect && !previousAnimatingCorrect {
-                previousAnimatingCorrect = true
-                showConfetti = true
+    private func setupAnimationTimer() {
+        // Clean up existing timer if any
+        cleanupAnimationTimer()
+        
+        // Create a new timer
+        animationTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            
+            if self.gameState.animatingCorrect && !self.previousAnimatingCorrect {
+                self.previousAnimatingCorrect = true
+                self.showConfetti = true
                 AudioManager.shared.playCorrectAnswerSound()
                 HapticManager.shared.success()
                 
                 // Hide confetti after animation completes
                 DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-                    showConfetti = false
+                    self.showConfetti = false
                 }
-            } else if !gameState.animatingCorrect {
-                previousAnimatingCorrect = false
+            } else if !self.gameState.animatingCorrect {
+                self.previousAnimatingCorrect = false
             }
         }
         
         // Add to run loop
-        RunLoop.current.add(timer, forMode: .common)
+        if let timer = animationTimer {
+            RunLoop.current.add(timer, forMode: .common)
+        }
+    }
+    
+    // Clean up timer resources
+    private func cleanupAnimationTimer() {
+        animationTimer?.invalidate()
+        animationTimer = nil
     }
 }
 
@@ -336,7 +375,9 @@ struct AnswerSlotView: View {
         ZStack {
             RoundedRectangle(cornerRadius: 8)
                 .fill(isCorrect ? Color.green : Color.gray.opacity(0.3))
-                .frame(width: 50, height: 50)
+                .frame(maxWidth: .infinity)
+                .frame(height: 50)
+                .accessibleFrame()
             
             Text(letter)
                 .font(.system(size: 28, weight: .bold))
@@ -370,6 +411,7 @@ struct AnswerSlotView: View {
 // Simple confetti effect view that doesn't use a modifier
 struct ConfettiEffectView: View {
     @State private var confetti: [ConfettiPiece] = []
+    @State private var animationTasks: [DispatchWorkItem] = []
     
     let colors: [Color] = [.red, .orange, .yellow, .green, .blue, .purple, .pink]
     
@@ -385,16 +427,27 @@ struct ConfettiEffectView: View {
         .onAppear {
             generateConfetti()
         }
+        .onDisappear {
+            // Cancel all animation tasks
+            for task in animationTasks {
+                task.cancel()
+            }
+            animationTasks.removeAll()
+            confetti.removeAll()
+        }
     }
     
     private func generateConfetti() {
         let screenWidth = UIScreen.main.bounds.width
         let screenHeight = UIScreen.main.bounds.height
         
+        // Limit the particles for better performance
+        let particleCount = UIDevice.current.userInterfaceIdiom == .pad ? 80 : 50
+        
         var newConfetti: [ConfettiPiece] = []
         
-        // Create 100 pieces of confetti
-        for _ in 0..<100 {
+        // Create confetti pieces
+        for _ in 0..<particleCount {
             let isCircle = Bool.random()
             let color = colors.randomElement() ?? .yellow
             let size = CGFloat.random(in: 5...15)
@@ -434,6 +487,15 @@ struct ConfettiEffectView: View {
                 confetti[i].opacity = 0
             }
         }
+        
+        // Create a cleanup task
+        let cleanupTask = DispatchWorkItem { [weak self] in
+            self?.confetti = []
+            self?.animationTasks.removeAll()
+        }
+        
+        animationTasks.append(cleanupTask)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.5, execute: cleanupTask)
     }
 }
 
@@ -456,5 +518,12 @@ struct ConfettiPiece: Identifiable {
                 Rectangle().fill(color).frame(width: size, height: size)
             }
         }
+    }
+}
+
+// Extension to make frames accessible
+extension View {
+    func accessibleFrame() -> some View {
+        self.frame(minWidth: 44, minHeight: 44)
     }
 }
