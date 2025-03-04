@@ -26,6 +26,9 @@ class AudioManager: NSObject, ObservableObject {
     private var audioPlayers: [String: AVAudioPlayer] = [:]
     private let audioSession = AVAudioSession.sharedInstance()
     
+    // Maximum number of simultaneous audio players to prevent resource exhaustion
+    private let maxSimultaneousPlayers = 10
+    
     // Audio sound names
     struct SoundEffect {
         static let correctAnswer = "correct_answer"
@@ -131,10 +134,22 @@ class AudioManager: NSObject, ObservableObject {
                 player.currentTime = 0
                 player.play()
             } else {
-                // Create another instance for overlapping sounds
+                // Create another instance for overlapping sounds if under the limit
                 duplicateAndPlaySound(soundName)
             }
             return
+        }
+        
+        // Check if we're at the max limit of audio players
+        if audioPlayers.count >= maxSimultaneousPlayers {
+            // Find and reuse any players that aren't playing
+            if let idlePlayer = audioPlayers.first(where: { !$0.value.isPlaying }) {
+                audioPlayers.removeValue(forKey: idlePlayer.key)
+            } else {
+                // If all are playing, skip this sound rather than creating more
+                Logger.shared.log(.warning, "Maximum number of audio players reached, skipping sound: \(soundName)")
+                return
+            }
         }
         
         // Otherwise, create and play
@@ -155,6 +170,17 @@ class AudioManager: NSObject, ObservableObject {
     
     /// Creates a duplicate player for simultaneous sound playback
     private func duplicateAndPlaySound(_ soundName: String) {
+        // Check if we're at the max limit of audio players
+        if audioPlayers.count >= maxSimultaneousPlayers {
+            // Find and reuse any players that aren't playing
+            if let idlePlayer = audioPlayers.first(where: { !$0.value.isPlaying }) {
+                audioPlayers.removeValue(forKey: idlePlayer.key)
+            } else {
+                // If all are playing, skip this duplicate sound
+                return
+            }
+        }
+        
         guard let soundURL = Bundle.main.url(forResource: soundName, withExtension: "mp3") else { return }
         
         do {
@@ -167,8 +193,8 @@ class AudioManager: NSObject, ObservableObject {
             audioPlayers[uniqueKey] = duplicatePlayer
             
             // Remove the duplicate after it finishes playing
-            DispatchQueue.main.asyncAfter(deadline: .now() + duplicatePlayer.duration + 0.1) {
-                self.audioPlayers.removeValue(forKey: uniqueKey)
+            DispatchQueue.main.asyncAfter(deadline: .now() + duplicatePlayer.duration + 0.1) { [weak self] in
+                self?.audioPlayers.removeValue(forKey: uniqueKey)
             }
         } catch {
             Logger.shared.log(.error, "Failed to play duplicate sound: \(error.localizedDescription)")
