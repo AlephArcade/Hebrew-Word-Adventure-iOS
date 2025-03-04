@@ -8,6 +8,9 @@ struct MainGameView: View {
     @ObservedObject private var dataManager = GameDataManager.shared
     @ObservedObject private var audioManager = AudioManager.shared
     
+    // Timer for observing game state changes
+    @State private var observationTimer: Timer? = nil
+    
     // Helper function to determine grid columns based on level
     private func gridColumns() -> [GridItem] {
         let columns: Int
@@ -222,24 +225,56 @@ struct MainGameView: View {
                         .background(Color.black.opacity(0.6))
                         .cornerRadius(10)
                         .transition(.opacity)
-                        .animation(.easeInOut, value: gameState.showingMessage)
                 }
             }
             .padding()
+            
+            // Confetti overlay
+            if showConfetti {
+                ConfettiView()
+                    .allowsHitTesting(false)
+            }
         }
-        .confetti(isPresented: $showConfetti)
-        .onChange(of: gameState.animatingCorrect) { oldValue, newValue in
-            if newValue && !oldValue {
-                // Trigger confetti when a word is completed correctly
+        .onAppear {
+            setupObservation()
+        }
+        .onDisappear {
+            // Clean up timer when view disappears
+            observationTimer?.invalidate()
+            observationTimer = nil
+        }
+    }
+    
+    // Setup observation of the gameState
+    private func setupObservation() {
+        // Track if we've seen animatingCorrect == true
+        var didSeeAnimating = false
+        
+        // Create a timer to check for changes in animatingCorrect
+        observationTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+            if gameState.animatingCorrect && !didSeeAnimating {
+                didSeeAnimating = true
                 showConfetti = true
                 AudioManager.shared.playCorrectAnswerSound()
                 HapticManager.shared.success()
+                
+                // Automatically hide confetti after animation completes
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) {
+                    showConfetti = false
+                }
+            } else if !gameState.animatingCorrect {
+                didSeeAnimating = false
             }
+        }
+        
+        // Make sure the timer is added to the run loop
+        if let timer = observationTimer {
+            RunLoop.current.add(timer, forMode: .common)
         }
     }
 }
 
-// Enhanced Letter Tile View with better animations
+// Enhanced Letter Tile View with pulse animation
 struct LetterTileView: View {
     let letter: String
     let isSelected: Bool
@@ -248,20 +283,21 @@ struct LetterTileView: View {
     let onTap: () -> Void
     
     @State private var animationAmount: CGFloat = 1.0
+    @State private var hasCheckedAnimation: Bool = false
     
     var body: some View {
         Button(action: onTap) {
             ZStack {
                 // Tile background
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(isSelected ? Color.green : Color(red: 1, green: 0.97, blue: 0.88)) // FFF8E1 in HTML
+                    .fill(isSelected ? Color.green : Color(red: 1, green: 0.97, blue: 0.88)) // FFF8E1 color
                     .shadow(radius: 2)
                     .aspectRatio(1, contentMode: .fit)
                 
                 // Letter text
                 Text(letter)
                     .font(.system(size: 32, weight: .bold))
-                    .foregroundColor(isSelected ? .white : Color(red: 0.06, green: 0.08, blue: 0.10)) // 0F1419 in HTML
+                    .foregroundColor(isSelected ? .white : Color(red: 0.06, green: 0.08, blue: 0.10)) // Dark color
                 
                 // Selection order indicator
                 if let order = selectionOrder {
@@ -274,30 +310,34 @@ struct LetterTileView: View {
                         .position(x: 60, y: 20)
                 }
             }
-            // Correct answer animation - similar to HTML version
-            .scaleEffect(animatingCorrect && isSelected ? animationAmount : 1)
-            .animation(
-                animatingCorrect && isSelected ?
-                    Animation.easeInOut(duration: 0.5)
-                        .repeatCount(3, autoreverses: true) :
-                    nil,
-                value: animatingCorrect
-            )
-            .onChange(of: animatingCorrect) { oldValue, newValue in
-                if newValue && !oldValue && isSelected {
-                    // Start the pulse animation
-                    withAnimation(Animation.easeInOut(duration: 0.5).repeatCount(3, autoreverses: true)) {
-                        animationAmount = 1.1
-                    }
-                    
-                    // Reset the animation after it's done
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                        animationAmount = 1.0
-                    }
-                }
-            }
+            // Pulse animation for correct answers
+            .scaleEffect(animationAmount)
         }
         .disabled(isSelected || animatingCorrect)
+        // Update animation when props change
+        .onAppear {
+            updateAnimation()
+        }
+        // This is needed to watch for changes in animatingCorrect
+        .id("\(letter)-\(isSelected)-\(animatingCorrect)")
+    }
+    
+    private func updateAnimation() {
+        // Only animate if selected and correct
+        if animatingCorrect && isSelected && !hasCheckedAnimation {
+            hasCheckedAnimation = true
+            
+            // Animate with pulse
+            withAnimation(Animation.easeInOut(duration: 0.5).repeatCount(3, autoreverses: true)) {
+                animationAmount = 1.1
+            }
+            
+            // Reset after animation
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                animationAmount = 1.0
+                hasCheckedAnimation = false
+            }
+        }
     }
 }
 
@@ -320,25 +360,31 @@ struct AnswerSlotView: View {
                 .font(.system(size: 28, weight: .bold))
                 .foregroundColor(.white)
         }
-        // Use scaleEffect for animation
         .scaleEffect(animationAmount)
-        .onChange(of: isCorrect) { oldValue, newValue in
-            if newValue && !hasAnimated {
-                // Add staggered animation delay based on index
-                DispatchQueue.main.asyncAfter(deadline: .now() + Double(index) * 0.15) {
-                    // Start the pulse animation
-                    withAnimation(Animation.easeInOut(duration: 0.5).repeatCount(1, autoreverses: true)) {
-                        animationAmount = 1.1
-                    }
-                    
-                    // Reset the animation after it's done
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        animationAmount = 1.0
-                        hasAnimated = true
-                    }
+        .onAppear {
+            triggerAnimation()
+        }
+        // This forces a refresh when isCorrect changes
+        .id("\(letter)-\(isCorrect)-\(index)")
+    }
+    
+    // Extract animation logic to a separate function
+    private func triggerAnimation() {
+        // Only animate if correct and not already animated
+        if isCorrect && !hasAnimated {
+            hasAnimated = true
+            
+            // Add staggered animation delay based on index
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(index) * 0.15) {
+                // Start the pulse animation
+                withAnimation(Animation.easeInOut(duration: 0.5).repeatCount(1, autoreverses: true)) {
+                    animationAmount = 1.1
                 }
-            } else if !newValue {
-                hasAnimated = false
+                
+                // Reset the animation after it's done
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    animationAmount = 1.0
+                }
             }
         }
     }
