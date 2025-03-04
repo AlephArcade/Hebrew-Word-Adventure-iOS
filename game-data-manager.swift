@@ -358,6 +358,3 @@ struct GameStatistics: Codable {
 }
 
 // MARK: - Extensions
-
-/// Extension to make Word conform to Codable
-extension Word: Codable {}
