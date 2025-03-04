@@ -17,6 +17,7 @@ struct BonusRoundView: View {
                         .font(.title2)
                         .fontWeight(.bold)
                         .foregroundColor(Color.yellow)
+                        .accessibilityAddTraits(.isHeader)
                     
                     Spacer()
                     
@@ -36,6 +37,7 @@ struct BonusRoundView: View {
                             .font(.headline)
                             .foregroundColor(.white)
                     }
+                    .accessibilityLabel("Time remaining: \(gameState.bonusTimeRemaining) seconds")
                     .onChange(of: gameState.bonusTimeRemaining) { oldValue, newValue in
                         if newValue <= 3 && newValue > 0 {
                             // Play a ticking sound for last few seconds
@@ -69,6 +71,7 @@ struct BonusRoundView: View {
                             )
                             .cornerRadius(20)
                         )
+                        .accessibilityLabel("Hebrew letter with nikud")
                     
                     // Sound info
                     VStack {
@@ -95,6 +98,7 @@ struct BonusRoundView: View {
                                             .fill(Color.blue.opacity(0.6))
                                     )
                             }
+                            .accessibilityHint("Select this if you think \(option) is the correct pronunciation")
                         }
                     }
                     .padding(.horizontal)
@@ -117,12 +121,18 @@ struct BonusRoundView: View {
                 // Play bonus round music when view appears
                 AudioManager.shared.playBonusRoundSound()
             }
+            .onDisappear {
+                // Make sure to clean up any resources when view disappears
+                gameState.pauseBonusRoundIfNeeded()
+            }
         }
+        // Properly support RTL for the entire view
+        .environment(\.layoutDirection, .rightToLeft) 
     }
     
     private func handleOptionSelected(_ option: String) {
         // Add haptic and sound feedback
-        if option == gameState.currentBonusChallenge?.correct {
+        if let challenge = gameState.currentBonusChallenge, option == challenge.correct {
             HapticManager.shared.success()
             AudioManager.shared.playCorrectAnswerSound()
         } else {
