@@ -38,8 +38,8 @@ struct BonusRoundView: View {
                             .foregroundColor(.white)
                     }
                     .accessibilityLabel("Time remaining: \(gameState.bonusTimeRemaining) seconds")
-                    .onChange(of: gameState.bonusTimeRemaining) { oldValue, newValue in
-                        if newValue <= 3 && newValue > 0 {
+                    .onChange(of: gameState.bonusTimeRemaining) {
+                        if gameState.bonusTimeRemaining <= 3 && gameState.bonusTimeRemaining > 0 {
                             // Play a ticking sound for last few seconds
                             AudioManager.shared.playButtonTapSound()
                             HapticManager.shared.selection()
