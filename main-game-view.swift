@@ -3,13 +3,11 @@ import SwiftUI
 struct MainGameView: View {
     @ObservedObject var gameState: GameState
     @State private var showConfetti = false
+    @State private var previousAnimatingCorrect = false
     
     // Access data and audio managers
     @ObservedObject private var dataManager = GameDataManager.shared
     @ObservedObject private var audioManager = AudioManager.shared
-    
-    // Timer for observing game state changes
-    @State private var observationTimer: Timer? = nil
     
     // Helper function to determine grid columns based on level
     private func gridColumns() -> [GridItem] {
@@ -224,57 +222,51 @@ struct MainGameView: View {
                         .padding()
                         .background(Color.black.opacity(0.6))
                         .cornerRadius(10)
-                        .transition(.opacity)
+                        .animation(.easeInOut, value: gameState.showingMessage)
                 }
             }
             .padding()
             
-            // Confetti overlay
+            // Add confetti overlay
             if showConfetti {
-                ConfettiView()
+                ConfettiEffectView()
+                    .ignoresSafeArea()
                     .allowsHitTesting(false)
             }
         }
         .onAppear {
-            setupObservation()
+            // Check for changes in animatingCorrect state
+            checkForCorrectAnswer()
         }
-        .onDisappear {
-            // Clean up timer when view disappears
-            observationTimer?.invalidate()
-            observationTimer = nil
-        }
+        // Force update the view when game state changes
+        .id("game-view-\(gameState.animatingCorrect)-\(gameState.score)")
     }
     
-    // Setup observation of the gameState
-    private func setupObservation() {
-        // Track if we've seen animatingCorrect == true
-        var didSeeAnimating = false
-        
+    // This function handles the confetti animation by watching for state changes
+    private func checkForCorrectAnswer() {
         // Create a timer to check for changes in animatingCorrect
-        observationTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
-            if gameState.animatingCorrect && !didSeeAnimating {
-                didSeeAnimating = true
+        let timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+            if gameState.animatingCorrect && !previousAnimatingCorrect {
+                previousAnimatingCorrect = true
                 showConfetti = true
                 AudioManager.shared.playCorrectAnswerSound()
                 HapticManager.shared.success()
                 
-                // Automatically hide confetti after animation completes
-                DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) {
+                // Hide confetti after animation completes
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
                     showConfetti = false
                 }
             } else if !gameState.animatingCorrect {
-                didSeeAnimating = false
+                previousAnimatingCorrect = false
             }
         }
         
-        // Make sure the timer is added to the run loop
-        if let timer = observationTimer {
-            RunLoop.current.add(timer, forMode: .common)
-        }
+        // Add to run loop
+        RunLoop.current.add(timer, forMode: .common)
     }
 }
 
-// Enhanced Letter Tile View with pulse animation
+// Letter Tile Component
 struct LetterTileView: View {
     let letter: String
     let isSelected: Bool
@@ -283,7 +275,6 @@ struct LetterTileView: View {
     let onTap: () -> Void
     
     @State private var animationAmount: CGFloat = 1.0
-    @State private var hasCheckedAnimation: Bool = false
     
     var body: some View {
         Button(action: onTap) {
@@ -314,34 +305,25 @@ struct LetterTileView: View {
             .scaleEffect(animationAmount)
         }
         .disabled(isSelected || animatingCorrect)
-        // Update animation when props change
         .onAppear {
-            updateAnimation()
-        }
-        // This is needed to watch for changes in animatingCorrect
-        .id("\(letter)-\(isSelected)-\(animatingCorrect)")
-    }
-    
-    private func updateAnimation() {
-        // Only animate if selected and correct
-        if animatingCorrect && isSelected && !hasCheckedAnimation {
-            hasCheckedAnimation = true
-            
-            // Animate with pulse
-            withAnimation(Animation.easeInOut(duration: 0.5).repeatCount(3, autoreverses: true)) {
-                animationAmount = 1.1
-            }
-            
-            // Reset after animation
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                animationAmount = 1.0
-                hasCheckedAnimation = false
+            // Start animation if correct answer
+            if animatingCorrect && isSelected {
+                withAnimation(Animation.easeInOut(duration: 0.5).repeatCount(3, autoreverses: true)) {
+                    animationAmount = 1.1
+                }
+                
+                // Reset animation
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    animationAmount = 1.0
+                }
             }
         }
+        // Create a unique ID to force refresh when animation state changes
+        .id("\(letter)-\(isSelected ? 1 : 0)-\(animatingCorrect ? 1 : 0)")
     }
 }
 
-// Enhanced Answer Slot View with staggered animations
+// Answer Slot Component
 struct AnswerSlotView: View {
     let letter: String
     let isCorrect: Bool
@@ -362,29 +344,116 @@ struct AnswerSlotView: View {
         }
         .scaleEffect(animationAmount)
         .onAppear {
-            triggerAnimation()
+            // Only animate when correct
+            if isCorrect && !hasAnimated {
+                hasAnimated = true
+                
+                // Add staggered animation delay based on index
+                DispatchQueue.main.asyncAfter(deadline: .now() + Double(index) * 0.15) {
+                    // Start animation
+                    withAnimation(Animation.easeInOut(duration: 0.5).repeatCount(1, autoreverses: true)) {
+                        animationAmount = 1.1
+                    }
+                    
+                    // Reset animation
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        animationAmount = 1.0
+                    }
+                }
+            }
         }
-        // This forces a refresh when isCorrect changes
-        .id("\(letter)-\(isCorrect)-\(index)")
+        // Create a unique ID to force refresh when state changes
+        .id("\(letter)-\(isCorrect ? 1 : 0)-\(index)")
+    }
+}
+
+// Simple confetti effect view that doesn't use a modifier
+struct ConfettiEffectView: View {
+    @State private var confetti: [ConfettiPiece] = []
+    
+    let colors: [Color] = [.red, .orange, .yellow, .green, .blue, .purple, .pink]
+    
+    var body: some View {
+        ZStack {
+            ForEach(confetti) { piece in
+                piece.view
+                    .position(x: piece.position.x, y: piece.position.y)
+                    .opacity(piece.opacity)
+                    .rotationEffect(.degrees(piece.rotation))
+            }
+        }
+        .onAppear {
+            generateConfetti()
+        }
     }
     
-    // Extract animation logic to a separate function
-    private func triggerAnimation() {
-        // Only animate if correct and not already animated
-        if isCorrect && !hasAnimated {
-            hasAnimated = true
+    private func generateConfetti() {
+        let screenWidth = UIScreen.main.bounds.width
+        let screenHeight = UIScreen.main.bounds.height
+        
+        var newConfetti: [ConfettiPiece] = []
+        
+        // Create 100 pieces of confetti
+        for _ in 0..<100 {
+            let isCircle = Bool.random()
+            let color = colors.randomElement() ?? .yellow
+            let size = CGFloat.random(in: 5...15)
             
-            // Add staggered animation delay based on index
-            DispatchQueue.main.asyncAfter(deadline: .now() + Double(index) * 0.15) {
-                // Start the pulse animation
-                withAnimation(Animation.easeInOut(duration: 0.5).repeatCount(1, autoreverses: true)) {
-                    animationAmount = 1.1
-                }
-                
-                // Reset the animation after it's done
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    animationAmount = 1.0
-                }
+            let startX = CGFloat.random(in: 0...screenWidth)
+            let startY = CGFloat.random(in: -50...0)
+            let endY = screenHeight + CGFloat.random(in: 0...100)
+            
+            let piece = ConfettiPiece(
+                isCircle: isCircle,
+                color: color,
+                size: size,
+                position: CGPoint(x: startX, y: startY),
+                finalY: endY,
+                rotation: Double.random(in: 0...360),
+                opacity: 1.0
+            )
+            
+            newConfetti.append(piece)
+        }
+        
+        confetti = newConfetti
+        
+        // Animate each piece
+        for i in 0..<confetti.count {
+            let duration = Double.random(in: 1.0...3.0)
+            
+            // Position animation
+            withAnimation(Animation.easeOut(duration: duration)) {
+                let piece = confetti[i]
+                confetti[i].position.y = piece.finalY
+                confetti[i].rotation += Double.random(in: 180...360)
+            }
+            
+            // Fade out animation
+            withAnimation(Animation.linear(duration: 0.5).delay(duration * 0.7)) {
+                confetti[i].opacity = 0
+            }
+        }
+    }
+}
+
+// Simple confetti piece model
+struct ConfettiPiece: Identifiable {
+    let id = UUID()
+    let isCircle: Bool
+    let color: Color
+    let size: CGFloat
+    var position: CGPoint
+    let finalY: CGFloat
+    var rotation: Double
+    var opacity: Double
+    
+    var view: some View {
+        Group {
+            if isCircle {
+                Circle().fill(color).frame(width: size, height: size)
+            } else {
+                Rectangle().fill(color).frame(width: size, height: size)
             }
         }
     }
