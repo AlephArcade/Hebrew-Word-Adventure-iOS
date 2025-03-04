@@ -70,6 +70,7 @@ struct ContentView: View {
                                     .padding(10)
                                     .background(Circle().fill(Color.black.opacity(0.5)))
                             }
+                            .accessibilityLabel("Home")
                             
                             Spacer()
                             
@@ -84,6 +85,7 @@ struct ContentView: View {
                                     .padding(10)
                                     .background(Circle().fill(Color.black.opacity(0.5)))
                             }
+                            .accessibilityLabel("Settings")
                         }
                         .padding()
                         
@@ -104,6 +106,10 @@ struct ContentView: View {
         .onAppear {
             // Check for a saved game on app launch
             checkForSavedGame()
+        }
+        .onDisappear {
+            // Ensure cleanup when app is terminated
+            gameState.cleanup()
         }
     }
     
@@ -236,6 +242,7 @@ struct StartScreenView: View {
                 .padding(.horizontal)
                 .offset(y: animating ? 0 : -20)
                 .opacity(animating ? 1 : 0)
+                .accessibilityAddTraits(.isHeader)
             
             // Subtitle
             Text("Master Hebrew letters by putting them in the right order!")
@@ -280,6 +287,7 @@ struct StartScreenView: View {
                             .degrees(animating ? 0 : 180),
                             axis: (x: 0, y: 1, z: 0)
                         )
+                        .accessibilityLabel("Hebrew letter \(letter)")
                 }
             }
             .padding(.vertical, 30)
@@ -303,6 +311,7 @@ struct StartScreenView: View {
                 }
                 .offset(y: animating ? 0 : 20)
                 .opacity(animating ? 1 : 0)
+                .accessibilityHint("Start a new game from the beginning")
                 
                 // Continue button (only if there's a saved game)
                 if dataManager.savedGameState != nil {
@@ -319,6 +328,7 @@ struct StartScreenView: View {
                     }
                     .offset(y: animating ? 0 : 20)
                     .opacity(animating ? 1 : 0)
+                    .accessibilityHint("Continue your previous game")
                 }
                 
                 // Dictionary button
@@ -335,6 +345,7 @@ struct StartScreenView: View {
                 }
                 .offset(y: animating ? 0 : 20)
                 .opacity(animating ? 1 : 0)
+                .accessibilityHint("View your learned Hebrew words")
                 
                 // Settings button
                 Button(action: openSettings) {
@@ -347,6 +358,7 @@ struct StartScreenView: View {
                 .padding(.top, 10)
                 .offset(y: animating ? 0 : 20)
                 .opacity(animating ? 1 : 0)
+                .accessibilityLabel("Settings")
             }
             
             // Version info
@@ -360,6 +372,23 @@ struct StartScreenView: View {
         .onAppear {
             withAnimation(.easeOut(duration: 1.0)) {
                 animating = true
+            }
+        }
+        // Set consistent RTL environment for Hebrew content
+        .environment(\.layoutDirection, .rightToLeft)
+    }
+}
+
+// Extension to add confetti functionality to any view
+extension View {
+    func confetti(isActive: Binding<Bool>) -> some View {
+        ZStack {
+            self
+            
+            if isActive.wrappedValue {
+                ConfettiView()
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
             }
         }
     }
