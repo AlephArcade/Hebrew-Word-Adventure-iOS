@@ -4,6 +4,10 @@ import SwiftUI
 struct ConfettiView: View {
     // Initial setup
     @State private var particles: [ConfettiParticle] = []
+    @State private var isAnimating = false
+    
+    // For cleanup
+    @State private var animationTask: DispatchWorkItem?
     
     // Color palette similar to HTML version
     private let colors: [Color] = [
@@ -31,12 +35,22 @@ struct ConfettiView: View {
             // Generate confetti when view appears
             generateConfetti()
         }
+        .onDisappear {
+            // Proper cleanup when view disappears
+            cleanupAnimations()
+        }
     }
     
     private func generateConfetti() {
+        // Cancel any previous animation task
+        cleanupAnimations()
+        
         var newParticles: [ConfettiParticle] = []
         
-        for _ in 0..<100 {
+        // Create fewer particles on older devices for better performance
+        let particleCount = UIDevice.current.userInterfaceIdiom == .pad ? 100 : 60
+        
+        for _ in 0..<particleCount {
             // Randomize properties for each particle
             let shape = shapes.randomElement() ?? .circle
             let color = colors.randomElement() ?? .yellow
@@ -69,7 +83,18 @@ struct ConfettiView: View {
         }
         
         self.particles = newParticles
+        self.isAnimating = true
         
+        // Create a new animation task
+        let task = DispatchWorkItem { [weak self] in
+            self?.animateParticles()
+        }
+        
+        self.animationTask = task
+        DispatchQueue.main.async(execute: task)
+    }
+    
+    private func animateParticles() {
         // Animate all particles
         for i in 0..<particles.count {
             // Animation delay for a more natural look
@@ -93,9 +118,27 @@ struct ConfettiView: View {
         }
         
         // Clean up particles after animation completes
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) {
-            particles = []
+        let cleanupTask = DispatchWorkItem { [weak self] in
+            guard let self = self else { return }
+            if self.isAnimating {
+                self.particles = []
+                self.isAnimating = false
+            }
         }
+        
+        // Store the cleanup task reference
+        self.animationTask = cleanupTask
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.5, execute: cleanupTask)
+    }
+    
+    private func cleanupAnimations() {
+        // Cancel any pending animation tasks
+        animationTask?.cancel()
+        animationTask = nil
+        
+        // Clear particles
+        particles = []
+        isAnimating = false
     }
 }
 
