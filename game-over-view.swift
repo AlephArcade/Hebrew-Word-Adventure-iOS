@@ -137,6 +137,11 @@ struct GameOverView: View {
                     Button(action: {
                         HapticManager.shared.mediumImpact()
                         AudioManager.shared.playButtonTapSound()
+                        
+                        // Explicitly set completed to false first for immediate UI update
+                        gameState.completed = false
+                        
+                        // Then reset the game state
                         gameState.startGame()
                     }) {
                         Text("PLAY AGAIN")
@@ -196,10 +201,23 @@ struct GameOverView: View {
             
             // Add confetti effect for success
             if showingConfetti && gameState.lives > 0 {
-                ConfettiView()
-                    .ignoresSafeArea()
-                    .allowsHitTesting(false)
-                    .accessibility(hidden: true)
+                ImprovedConfettiView(
+                    particleCount: 80,
+                    colors: [
+                        Color(red: 1.0, green: 0.85, blue: 0.35), // Yellowish
+                        Color(red: 0.3, green: 0.69, blue: 0.31), // Greenish
+                        Color(red: 0.13, green: 0.59, blue: 0.95), // Blueish
+                        Color(red: 0.91, green: 0.12, blue: 0.39), // Pinkish
+                        Color(red: 0.61, green: 0.15, blue: 0.69)  // Purplish
+                    ],
+                    confettiSize: 15,
+                    rainHeight: UIScreen.main.bounds.height * 1.2,
+                    openingAngle: .degrees(30),
+                    closingAngle: .degrees(150)
+                )
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+                .accessibility(hidden: true)
             }
             
             // High score name input sheet
@@ -321,9 +339,13 @@ struct GameOverView: View {
         if gameState.lives > 0 {
             showingConfetti = true
             
+            // Cancel any existing task
+            confettiTask?.cancel()
+            
             // Schedule confetti to disappear
-            let task = DispatchWorkItem {
-                showingConfetti = false
+            let task = DispatchWorkItem { [weak self] in
+                guard let self = self else { return }
+                self.showingConfetti = false
             }
             confettiTask = task
             
