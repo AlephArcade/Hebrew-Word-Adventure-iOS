@@ -37,7 +37,28 @@ class GameDataManager: ObservableObject {
     
     // MARK: - Initialization
     private init() {
+        // Initialize UserDefaults values if they don't exist
+        registerDefaultsIfNeeded()
         loadData()
+    }
+    
+    // MARK: - UserDefaults Setup
+    
+    /// Register default values for UserDefaults if they don't exist
+    private func registerDefaultsIfNeeded() {
+        let defaults: [String: Any] = [
+            Keys.highScores: Data(),
+            Keys.learnedWords: Data(),
+            Keys.statistics: try? encoder.encode(GameStatistics()),
+            "audio_muted": false,
+            "audio_volume": 0.8,
+            "haptics_enabled": true,
+            "continue_enabled": true,
+            "logging_enabled": false,
+            "log_to_file": false
+        ]
+        
+        userDefaults.register(defaults: defaults)
     }
     
     // MARK: - Data Loading
@@ -94,10 +115,22 @@ class GameDataManager: ObservableObject {
         }
         
         do {
-            savedGameState = try decoder.decode(SavedGameState.self, from: data)
+            // Validate saved game data
+            let state = try decoder.decode(SavedGameState.self, from: data)
+            
+            // Only use the saved state if it's valid (e.g., has a reasonable date)
+            if state.date.timeIntervalSinceNow > -30 * 24 * 60 * 60 { // 30 days
+                savedGameState = state
+            } else {
+                // Saved game is too old, discard it
+                savedGameState = nil
+                userDefaults.removeObject(forKey: Keys.savedGameState)
+            }
         } catch {
             logger.logError(error, category: Logger.Category.data)
             savedGameState = nil
+            // Clear corrupted data
+            userDefaults.removeObject(forKey: Keys.savedGameState)
         }
     }
     
@@ -113,6 +146,8 @@ class GameDataManager: ObservableObject {
         } catch {
             logger.logError(error, category: Logger.Category.data)
             statistics = GameStatistics()
+            // Save the fresh statistics since the existing ones were corrupted
+            saveStatistics()
         }
     }
     
@@ -137,6 +172,7 @@ class GameDataManager: ObservableObject {
             userDefaults.set(data, forKey: Keys.highScores)
         } catch {
             logger.logError(error, category: Logger.Category.data)
+            ErrorHandler.shared.handle(error, showToUser: false)
         }
     }
     
@@ -147,6 +183,7 @@ class GameDataManager: ObservableObject {
             userDefaults.set(data, forKey: Keys.learnedWords)
         } catch {
             logger.logError(error, category: Logger.Category.data)
+            ErrorHandler.shared.handle(error, showToUser: false)
         }
     }
     
@@ -158,6 +195,7 @@ class GameDataManager: ObservableObject {
             savedGameState = state
         } catch {
             logger.logError(error, category: Logger.Category.data)
+            ErrorHandler.shared.handle(error, showToUser: false)
         }
     }
     
@@ -174,6 +212,7 @@ class GameDataManager: ObservableObject {
             userDefaults.set(data, forKey: Keys.statistics)
         } catch {
             logger.logError(error, category: Logger.Category.data)
+            ErrorHandler.shared.handle(error, showToUser: false)
         }
     }
     
@@ -181,6 +220,9 @@ class GameDataManager: ObservableObject {
     
     /// Adds a new high score, maintaining a maximum of 10 scores
     func addHighScore(score: Int, level: Int, wordsCompleted: Int) {
+        // Only add scores greater than 0
+        guard score > 0 else { return }
+        
         let newScore = HighScore(
             id: UUID(),
             playerName: "",  // Can be updated later
@@ -281,7 +323,12 @@ class GameDataManager: ObservableObject {
     func recordGameCompletion(score: Int, level: Int, wordsCompleted: Int, time: TimeInterval) {
         statistics.gamesPlayed += 1
         statistics.totalScore += score
-        statistics.averageScore = statistics.totalScore / statistics.gamesPlayed
+        
+        // Avoid division by zero
+        if statistics.gamesPlayed > 0 {
+            statistics.averageScore = statistics.totalScore / statistics.gamesPlayed
+        }
+        
         statistics.highestLevel = max(statistics.highestLevel, level)
         statistics.totalWordsCompleted += wordsCompleted
         
@@ -291,7 +338,11 @@ class GameDataManager: ObservableObject {
         
         // Record time statistics
         statistics.totalPlayTime += time
-        statistics.averageGameTime = statistics.totalPlayTime / Double(statistics.gamesPlayed)
+        
+        // Avoid division by zero
+        if statistics.gamesPlayed > 0 {
+            statistics.averageGameTime = statistics.totalPlayTime / Double(statistics.gamesPlayed)
+        }
         
         saveStatistics()
     }
@@ -356,5 +407,3 @@ struct GameStatistics: Codable {
     var totalPlayTime: TimeInterval = 0
     var averageGameTime: TimeInterval = 0
 }
-
-// MARK: - Extensions
