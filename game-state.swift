@@ -265,15 +265,16 @@ class GameState: ObservableObject {
         return level < 6 ? level + 1 : 6
     }
     
+// Replace handleLetterSelect function to fix the deselection logic:
     func handleLetterSelect(index: Int) {
         // Prevent selection during animation
-        if animatingCorrect { return }
+        if animatingCorrect || animatingIncorrect { return }
         
         // Check if already selected
         if selectedLetters.contains(index) {
-            // Remove this letter from selection, regardless of position
-            if let position = selectedLetters.firstIndex(of: index) {
-                selectedLetters.remove(at: position)
+            // If this is the last letter selected, deselect it
+            if let position = selectedLetters.lastIndex(of: index), position == selectedLetters.count - 1 {
+                selectedLetters.removeLast()
             }
             return
         }
@@ -284,8 +285,9 @@ class GameState: ObservableObject {
         // Check if selection is complete
         if selectedLetters.count == currentWord?.hebrew.count {
             checkAnswer()
-            }
+        }
     }
+
     
     // Update the checkAnswer function to handle incorrect answers with animation
     func checkAnswer() {
