@@ -64,15 +64,13 @@ struct ConfettiView: View {
         self.particles = newParticles
         self.isAnimating = true
         
-        // Create a new animation task
-        let task = DispatchWorkItem { [self] in
-            animateParticles()
+        // Create a new animation task - using DispatchQueue directly
+        DispatchQueue.main.async { [weak self] in
+            self?.animateParticles()
         }
-        
-        self.animationTask = task
-        DispatchQueue.main.async(execute: task)
     }
-    
+
+    // Update createFallingParticle to match JavaScript version:
     private func createFallingParticle(particles: inout [ConfettiParticle]) {
         // Randomize properties for each particle
         let shape = shapes.randomElement() ?? .circle
@@ -88,8 +86,12 @@ struct ConfettiView: View {
         let startY = CGFloat.random(in: -100...0) // Start above screen
         
         // End position is somewhere toward bottom of screen
+        // Add more horizontal movement to match JavaScript
         let endX = startX + CGFloat.random(in: -screenWidth/2...screenWidth/2)
         let endY = screenHeight + CGFloat.random(in: 0...100)
+        
+        // Random rotation speed matching JavaScript
+        let rotationSpeed = Double.random(in: -720...720)
         
         // Create the particle
         let particle = ConfettiParticle(
@@ -99,13 +101,14 @@ struct ConfettiView: View {
             position: CGPoint(x: startX, y: startY),
             finalPosition: CGPoint(x: endX, y: endY),
             rotation: Double.random(in: 0...360),
-            rotationSpeed: Double.random(in: -720...720),
+            rotationSpeed: rotationSpeed,
             scale: 1.0,
             particleType: .falling
         )
         
         particles.append(particle)
     }
+
     
     private func createShootingParticle(particles: inout [ConfettiParticle]) {
         // Randomize properties for each particle
@@ -146,34 +149,42 @@ struct ConfettiView: View {
         particles.append(particle)
     }
     
+// Replace animateParticles function to improve performance:
     private func animateParticles() {
-        // Animate all particles
-        for i in 0..<particles.count {
-            if i >= particles.count { continue } // Safety check
+        // Process particles in smaller batches to prevent animation freezing
+        let batchSize = 20
+        let totalBatches = (particles.count + batchSize - 1) / batchSize
+        
+        for batchIndex in 0..<totalBatches {
+            let startIndex = batchIndex * batchSize
+            let endIndex = min(startIndex + batchSize, particles.count)
             
-            let particle = particles[i]
-            let delay = Double.random(in: 0...0.5)
-            
-            switch particle.particleType {
-            case .falling:
-                animateFallingParticle(index: i, delay: delay)
-            case .shooting:
-                animateShootingParticle(index: i, delay: delay)
+            // Process this batch with a slight delay to spread the animation load
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(batchIndex) * 0.05) { [weak self] in
+                guard let self = self else { return }
+                
+                for i in startIndex..<endIndex {
+                    if i >= self.particles.count { continue } // Safety check
+                    
+                    let particle = self.particles[i]
+                    let delay = Double.random(in: 0...0.3) // Reduced max delay
+                    
+                    switch particle.particleType {
+                    case .falling:
+                        self.animateFallingParticle(index: i, delay: delay)
+                    case .shooting:
+                        self.animateShootingParticle(index: i, delay: delay)
+                    }
+                }
             }
         }
         
         // Clean up particles after animation completes
-        let cleanupTask = DispatchWorkItem { [self] in
-            if isAnimating {
-                particles = []
-                isAnimating = false
-            }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) { [weak self] in
+            self?.cleanupAnimations()
         }
-        
-        // Store the cleanup task reference
-        self.animationTask = cleanupTask
-        DispatchQueue.main.asyncAfter(deadline: .now() + 5.0, execute: cleanupTask)
     }
+
     
     private func animateFallingParticle(index: Int, delay: Double) {
         let duration = Double.random(in: 2.0...4.0)
