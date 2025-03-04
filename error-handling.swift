@@ -27,12 +27,15 @@ class ErrorHandler: ObservableObject {
             appError = AppError.system(error)
         }
         
-        // Update the current error
-        self.currentError = appError
-        
-        // Show to user if requested
-        if showToUser {
-            self.showingError = true
+        // Update the current error on the main thread
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.currentError = appError
+            
+            // Show to user if requested
+            if showToUser {
+                self.showingError = true
+            }
         }
     }
     
@@ -44,8 +47,10 @@ class ErrorHandler: ObservableObject {
     
     /// Clears the current error
     func clearError() {
-        currentError = nil
-        showingError = false
+        DispatchQueue.main.async { [weak self] in
+            self?.currentError = nil
+            self?.showingError = false
+        }
     }
 }
 
@@ -58,6 +63,7 @@ enum AppError: Error, Identifiable {
     case network(String)
     case data(String)
     case game(String)
+    case assetMissing(String)
     
     var id: String {
         switch self {
@@ -71,6 +77,8 @@ enum AppError: Error, Identifiable {
             return "data_\(message)"
         case .game(let message):
             return "game_\(message)"
+        case .assetMissing(let message):
+            return "asset_\(message)"
         }
     }
     
@@ -86,6 +94,8 @@ enum AppError: Error, Identifiable {
             return "Data Error"
         case .game:
             return "Game Error"
+        case .assetMissing:
+            return "Asset Error"
         }
     }
     
@@ -101,6 +111,8 @@ enum AppError: Error, Identifiable {
             return message
         case .game(let message):
             return message
+        case .assetMissing(let message):
+            return "Missing asset: \(message)"
         }
     }
     
@@ -108,6 +120,8 @@ enum AppError: Error, Identifiable {
         switch self {
         case .custom(_, let detail):
             return detail
+        case .assetMissing:
+            return "Please make sure all required assets are added to the Xcode project."
         default:
             return nil
         }
@@ -162,6 +176,18 @@ extension Result {
             return nil
         }
     }
+}
+
+// MARK: - Asset Validation
+
+/// Helper function to check if a sound file exists
+func soundExists(_ soundName: String) -> Bool {
+    return Bundle.main.url(forResource: soundName, withExtension: "mp3") != nil
+}
+
+/// Helper function to check if a color asset exists
+func colorExists(_ colorName: String) -> Bool {
+    return UIColor(named: colorName) != nil
 }
 
 // MARK: - Convenience functions
