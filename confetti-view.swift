@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// A simplified confetti animation view that creates a celebration effect
+/// A simpler confetti animation view
 struct ConfettiView: View {
     // Initial setup
     @State private var particles: [ConfettiParticle] = []
@@ -34,7 +34,6 @@ struct ConfettiView: View {
     }
     
     private func generateConfetti() {
-        // Create an array to hold particle data 
         var newParticles: [ConfettiParticle] = []
         
         for _ in 0..<100 {
@@ -63,45 +62,39 @@ struct ConfettiView: View {
                 position: CGPoint(x: startX, y: startY),
                 finalPosition: CGPoint(x: endX, y: endY),
                 rotation: Double.random(in: 0...360),
-                rotationSpeed: Double.random(in: -720...720),
-                fallSpeed: Double.random(in: 1.0...2.5)
+                rotationSpeed: Double.random(in: -720...720)
             )
             
             newParticles.append(particle)
         }
         
-        // Add all the particles
         self.particles = newParticles
         
-        // Animate each particle
+        // Animate all particles
         for i in 0..<particles.count {
             // Animation delay for a more natural look
             let delay = Double.random(in: 0...0.5)
             let duration = Double.random(in: 1.5...3.0)
             
-            // Update position with animation
+            // Position animation
             withAnimation(Animation.easeOut(duration: duration).delay(delay)) {
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay + 0.1) {
-                    if i < self.particles.count {
-                        self.particles[i].position = self.particles[i].finalPosition
-                        self.particles[i].rotation += self.particles[i].rotationSpeed
-                    }
+                if i < particles.count {
+                    particles[i].position = particles[i].finalPosition
+                    particles[i].rotation += particles[i].rotationSpeed
                 }
             }
             
             // Fade out animation
             withAnimation(Animation.linear(duration: 0.7).delay(duration * 0.8)) {
-                DispatchQueue.main.asyncAfter(deadline: .now() + duration * 0.8) {
-                    if i < self.particles.count {
-                        self.particles[i].opacity = 0
-                    }
+                if i < particles.count {
+                    particles[i].opacity = 0
                 }
             }
         }
         
-        // Remove particles after animation completes
+        // Clean up particles after animation completes
         DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) {
-            self.particles = []
+            particles = []
         }
     }
 }
@@ -117,7 +110,6 @@ struct ConfettiParticle: Identifiable {
     let finalPosition: CGPoint
     var rotation: Double
     let rotationSpeed: Double
-    let fallSpeed: Double
     var opacity: Double = 1.0
     
     var view: some View {
