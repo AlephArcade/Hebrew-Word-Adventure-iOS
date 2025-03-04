@@ -26,7 +26,7 @@ struct SettingsView: View {
                     )) {
                         Label("Sound Effects", systemImage: "speaker.wave.2")
                     }
-                    .onChange(of: audioManager.isMuted) { _ in
+                   .onChange(of: audioManager.isMuted) {
                         if !audioManager.isMuted {
                             AudioManager.shared.playButtonTapSound()
                         }
@@ -60,8 +60,8 @@ struct SettingsView: View {
                     Toggle(isOn: $hapticsEnabled) {
                         Label("Haptic Feedback", systemImage: "iphone.radiowaves.left.and.right")
                     }
-                    .onChange(of: hapticsEnabled) { newValue in
-                        if newValue {
+                    .onChange(of: hapticsEnabled) {
+                        if hapticsEnabled {
                             HapticManager.shared.mediumImpact()
                         }
                     }
