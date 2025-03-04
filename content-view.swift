@@ -221,7 +221,7 @@ struct ContentView: View {
     }
 }
 
-// Start Screen View
+// Start Screen View with fixed Hebrew letter order
 struct StartScreenView: View {
     let startGame: () -> Void
     let continuePreviousGame: () -> Void
@@ -265,9 +265,10 @@ struct StartScreenView: View {
             
             Spacer()
             
-            // Hebrew letters animation
+            // Hebrew letters animation - fixed RTL order
             HStack(spacing: 15) {
-                ForEach(["ה", "ד", "ג", "ב", "א"], id: \.self) { letter in
+                // Hebrew letters in proper RTL order: Alef, Bet, Gimel, Dalet, Hey
+                ForEach(["א", "ב", "ג", "ד", "ה"], id: \.self) { letter in
                     Text(letter)
                         .font(.system(size: 48, weight: .bold))
                         .foregroundColor(.white)
