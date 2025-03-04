@@ -1,11 +1,9 @@
 import SwiftUI
 
-/// An enhanced confetti animation view that creates a celebration effect
+/// A simplified confetti animation view that creates a celebration effect
 struct ConfettiView: View {
-    // Configuration
-    private let particleCount = 100
-    private let duration: Double = 3.0
-    private let opacityDelay: Double = 2.5
+    // Initial setup
+    @State private var particles: [ConfettiParticle] = []
     
     // Color palette similar to HTML version
     private let colors: [Color] = [
@@ -17,10 +15,7 @@ struct ConfettiView: View {
     ]
     
     // Different confetti shapes
-    private let shapes: [ConfettiShape] = [.circle, .triangle, .square, .slimRectangle, .hexagon]
-    
-    // Track created particles
-    @State private var particles: [ConfettiParticle] = []
+    private let shapes: [ConfettiShape] = [.circle, .triangle, .square]
     
     var body: some View {
         ZStack {
@@ -33,16 +28,19 @@ struct ConfettiView: View {
             }
         }
         .onAppear {
+            // Generate confetti when view appears
             generateConfetti()
         }
     }
     
-    /// Create confetti particles with random properties
     private func generateConfetti() {
-        particles = (0..<particleCount).map { _ in
+        // Create an array to hold particle data 
+        var newParticles: [ConfettiParticle] = []
+        
+        for _ in 0..<100 {
             // Randomize properties for each particle
-            let shape = shapes.randomElement()!
-            let color = colors.randomElement()!
+            let shape = shapes.randomElement() ?? .circle
+            let color = colors.randomElement() ?? .yellow
             
             // Size varies based on shape
             let size = CGFloat.random(in: 5...15)
@@ -66,47 +64,49 @@ struct ConfettiView: View {
                 finalPosition: CGPoint(x: endX, y: endY),
                 rotation: Double.random(in: 0...360),
                 rotationSpeed: Double.random(in: -720...720),
-                swingRange: Double.random(in: 0...30),
-                swingSpeed: Double.random(in: 1...3),
                 fallSpeed: Double.random(in: 1.0...2.5)
             )
             
-            // Animate particle falling
-            withAnimation(
-                Animation
-                    .easeOut(duration: duration * particle.fallSpeed)
-                    .delay(Double.random(in: 0...0.5))
-            ) {
-                // Update position in particles array
-                let index = particles.count
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    if index < particles.count {
-                        particles[index].position = particle.finalPosition
-                        particles[index].rotation += particle.rotationSpeed
+            newParticles.append(particle)
+        }
+        
+        // Add all the particles
+        self.particles = newParticles
+        
+        // Animate each particle
+        for i in 0..<particles.count {
+            // Animation delay for a more natural look
+            let delay = Double.random(in: 0...0.5)
+            let duration = Double.random(in: 1.5...3.0)
+            
+            // Update position with animation
+            withAnimation(Animation.easeOut(duration: duration).delay(delay)) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay + 0.1) {
+                    if i < self.particles.count {
+                        self.particles[i].position = self.particles[i].finalPosition
+                        self.particles[i].rotation += self.particles[i].rotationSpeed
                     }
                 }
             }
             
-            // Fade out toward the end
-            withAnimation(
-                Animation
-                    .linear(duration: 0.7)
-                    .delay(opacityDelay * particle.fallSpeed)
-            ) {
-                let index = particles.count
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    if index < particles.count {
-                        particles[index].opacity = 0
+            // Fade out animation
+            withAnimation(Animation.linear(duration: 0.7).delay(duration * 0.8)) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + duration * 0.8) {
+                    if i < self.particles.count {
+                        self.particles[i].opacity = 0
                     }
                 }
             }
-            
-            return particle
+        }
+        
+        // Remove particles after animation completes
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) {
+            self.particles = []
         }
     }
 }
 
-/// Individual confetti particle
+/// Individual confetti particle with simplified structure
 struct ConfettiParticle: Identifiable {
     let id = UUID()
     let shape: ConfettiShape
@@ -117,8 +117,6 @@ struct ConfettiParticle: Identifiable {
     let finalPosition: CGPoint
     var rotation: Double
     let rotationSpeed: Double
-    let swingRange: Double
-    let swingSpeed: Double
     let fallSpeed: Double
     var opacity: Double = 1.0
     
@@ -137,26 +135,16 @@ struct ConfettiParticle: Identifiable {
                 Rectangle()
                     .fill(color)
                     .frame(width: size, height: size)
-            case .slimRectangle:
-                Rectangle()
-                    .fill(color)
-                    .frame(width: size/3, height: size)
-            case .hexagon:
-                Hexagon()
-                    .fill(color)
-                    .frame(width: size, height: size)
             }
         }
     }
 }
 
-/// Available confetti shapes
+/// Available confetti shapes (simplified)
 enum ConfettiShape {
     case circle
     case triangle
     case square
-    case slimRectangle
-    case hexagon
 }
 
 /// Custom triangle shape
@@ -168,61 +156,5 @@ struct Triangle: Shape {
         path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
         path.closeSubpath()
         return path
-    }
-}
-
-/// Custom hexagon shape
-struct Hexagon: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let center = CGPoint(x: rect.midX, y: rect.midY)
-        let radius = min(rect.width, rect.height) / 2
-        
-        // Six points of the hexagon
-        let points = (0..<6).map { i -> CGPoint in
-            let angle = Double(i) * .pi / 3
-            return CGPoint(
-                x: center.x + CGFloat(cos(angle)) * radius,
-                y: center.y + CGFloat(sin(angle)) * radius
-            )
-        }
-        
-        path.move(to: points[0])
-        for i in 1..<6 {
-            path.addLine(to: points[i])
-        }
-        path.closeSubpath()
-        
-        return path
-    }
-}
-
-/// Modifier to add confetti to any view
-struct ConfettiModifier: ViewModifier {
-    @Binding var isPresented: Bool
-    
-    func body(content: Content) -> some View {
-        ZStack {
-            content
-            
-            if isPresented {
-                ConfettiView()
-                    .allowsHitTesting(false)  // Let touches pass through
-                    .transition(.opacity)
-                    .onAppear {
-                        // Auto-dismiss after animation completes
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) {
-                            isPresented = false 
-                        }
-                    }
-            }
-        }
-    }
-}
-
-/// Extension to make applying confetti easier
-extension View {
-    func confetti(isPresented: Binding<Bool>) -> some View {
-        self.modifier(ConfettiModifier(isPresented: isPresented))
     }
 }
