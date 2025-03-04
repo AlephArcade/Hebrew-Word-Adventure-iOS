@@ -343,9 +343,8 @@ struct GameOverView: View {
             confettiTask?.cancel()
             
             // Schedule confetti to disappear
-            let task = DispatchWorkItem { [weak self] in
-                guard let self = self else { return }
-                self.showingConfetti = false
+            let task = DispatchWorkItem {
+                showingConfetti = false
             }
             confettiTask = task
             
