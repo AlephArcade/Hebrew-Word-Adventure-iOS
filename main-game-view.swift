@@ -252,22 +252,21 @@ struct MainGameView: View {
             .padding()
             
             // Add confetti overlay - moved outside the VStack with explicit zIndex
+            // SIMPLIFIED CONFETTI IMPLEMENTATION
             if showConfetti {
-                ImprovedConfettiView(
-                    particleCount: 50,
+                FallingConfettiView(
+                    count: 50,
                     colors: [
                         Color(red: 1.0, green: 0.85, blue: 0.35), // Yellowish
                         Color(red: 0.3, green: 0.69, blue: 0.31), // Greenish
                         Color(red: 0.13, green: 0.59, blue: 0.95), // Blueish
                         Color(red: 0.91, green: 0.12, blue: 0.39), // Pinkish
                         Color(red: 0.61, green: 0.15, blue: 0.69)  // Purplish
-                    ],
-                    confettiSize: 12,
-                    rainHeight: UIScreen.main.bounds.height * 1.2
+                    ]
                 )
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
-                .zIndex(100) // Ensure it's displayed on top
+                .zIndex(100) // Show on top
             }
         }
         .onAppear {
@@ -296,39 +295,41 @@ struct MainGameView: View {
         .environment(\.layoutDirection, .rightToLeft)
     }
     
-    private func handleAnimationChange(_ newValue: Bool) {
-        // Handle correct animation state change
-        if newValue && !previousAnimatingCorrect {
-            // Set flags to begin animation sequence
-            previousAnimatingCorrect = true
-            
-            // Show confetti immediately
+private func handleAnimationChange(_ newValue: Bool) {
+    // Handle correct animation state change
+    if newValue && !previousAnimatingCorrect {
+        // Set flags to begin animation sequence
+        previousAnimatingCorrect = true
+        
+        // Show confetti immediately
+        print("Setting showConfetti to true")
+        withAnimation {
+            showConfetti = true
+        }
+        
+        // Play sound and haptic feedback
+        AudioManager.shared.playCorrectAnswerSound()
+        HapticManager.shared.success()
+        
+        // Hide confetti after animation completes
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+            print("Setting showConfetti to false")
             withAnimation {
-                showConfetti = true
+                showConfetti = false
             }
-            
-            // Play sound and haptic feedback
-            AudioManager.shared.playCorrectAnswerSound()
-            HapticManager.shared.success()
-            
-            // Hide confetti after animation completes
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-                withAnimation {
-                    showConfetti = false
-                }
-            }
-        } else if !newValue && previousAnimatingCorrect {
-            // Reset the flag when animation ends
-            previousAnimatingCorrect = false
-            
-            // Ensure confetti is hidden when animation ends
-            if showConfetti {
-                withAnimation {
-                    showConfetti = false
-                }
+        }
+    } else if !newValue && previousAnimatingCorrect {
+        // Reset the flag when animation ends
+        previousAnimatingCorrect = false
+        
+        // Ensure confetti is hidden when animation ends
+        if showConfetti {
+            withAnimation {
+                showConfetti = false
             }
         }
     }
+}
 }
 
 // Letter Tile Component
