@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// A modern confetti view inspired by SimonBachmann's ConfettiSwiftUI
+/// A simplified confetti view that properly animates confetti particles
 struct ImprovedConfettiView: View {
     // Configuration
     private let particleCount: Int
@@ -12,9 +12,6 @@ struct ImprovedConfettiView: View {
     private let openingAngle: Angle
     private let closingAngle: Angle
     private let radius: CGFloat
-    
-    // Animation state
-    @State private var isAnimating = false
     
     init(
         particleCount: Int = 40,
@@ -49,21 +46,13 @@ struct ImprovedConfettiView: View {
                     closingAngle: closingAngle,
                     radius: radius,
                     rainHeight: rainHeight,
-                    opacity: opacity,
-                    isAnimating: isAnimating
+                    opacity: opacity
                 )
-            }
-        }
-        .onAppear {
-            // Start the animation as soon as the view appears
-            DispatchQueue.main.async {
-                isAnimating = true
             }
         }
     }
 }
 
-/// Individual confetti particle
 struct ConfettiParticleView: View {
     let shape: ConfettiShape
     let color: Color
@@ -73,23 +62,20 @@ struct ConfettiParticleView: View {
     let radius: CGFloat
     let rainHeight: CGFloat
     let opacity: Double
-    let isAnimating: Bool
     
     // Animation state
-    @State private var location = CGPoint.zero
-    @State private var particleOpacity = 0.0
-    @State private var rotation3DX = 0.0
-    @State private var rotation3DZ = 0.0
+    @State private var xPosition: CGFloat = 0
+    @State private var yPosition: CGFloat = 0
+    @State private var particleOpacity: Double = 0.0
+    @State private var rotation: Double = 0.0
+    @State private var rotation3D: Double = 0.0
     
     // Randomized values for varied animation
-    private let spinDirectionX: Double
-    private let spinDirectionZ: Double
-    private let rotationSpeed: Double
-    private let rotationSpeedZ: Double
-    private let randomAnchor: CGFloat
-    
-    // Task for proper cancellation
-    @State private var rainAnimationTask: DispatchWorkItem?
+    private let randomX: CGFloat
+    private let randomY: CGFloat
+    private let randomDelay: Double
+    private let randomRotationSpeed: Double
+    private let spinDirection: Double
     
     init(
         shape: ConfettiShape,
@@ -99,8 +85,7 @@ struct ConfettiParticleView: View {
         closingAngle: Angle,
         radius: CGFloat,
         rainHeight: CGFloat,
-        opacity: Double,
-        isAnimating: Bool
+        opacity: Double
     ) {
         self.shape = shape
         self.color = color
@@ -110,14 +95,13 @@ struct ConfettiParticleView: View {
         self.radius = radius
         self.rainHeight = rainHeight
         self.opacity = opacity
-        self.isAnimating = isAnimating
         
-        // Initialize random values during init to avoid @State vars that never change
-        self.spinDirectionX = Double.random(in: -1...1) > 0 ? 1.0 : -1.0
-        self.spinDirectionZ = Double.random(in: -1...1) > 0 ? 1.0 : -1.0
-        self.rotationSpeed = Double.random(in: 1.0...3.0)
-        self.rotationSpeedZ = Double.random(in: 1.0...3.0)
-        self.randomAnchor = CGFloat.random(in: 0...1).rounded()
+        // Initialize with random values for natural variation
+        self.randomX = CGFloat.random(in: -radius...radius)
+        self.randomY = CGFloat.random(in: -20...20)
+        self.randomDelay = Double.random(in: 0...0.3)
+        self.randomRotationSpeed = Double.random(in: 0.5...2.0)
+        self.spinDirection = Double.random(in: -1...1) > 0 ? 1.0 : -1.0
     }
     
     var body: some View {
@@ -125,73 +109,49 @@ struct ConfettiParticleView: View {
             .frame(width: size, height: size)
             .foregroundColor(color)
             .opacity(particleOpacity)
-            .position(location)
-            .rotation3DEffect(.degrees(rotation3DX), axis: (x: spinDirectionX, y: 0, z: 0))
-            .rotation3DEffect(.degrees(rotation3DZ), axis: (x: 0, y: 0, z: spinDirectionZ), anchor: UnitPoint(x: randomAnchor, y: randomAnchor))
-            // iOS 17 compatible onChange
-            #if swift(>=5.9)
-            .onChange(of: isAnimating) { _, startAnimation in
-                if startAnimation {
-                    animateParticle()
-                }
-            }
-            #else
-            .onChange(of: isAnimating) { startAnimation in
-                if startAnimation {
-                    animateParticle()
-                }
-            }
-            #endif
-            .onDisappear {
-                // Clean up any pending tasks
-                rainAnimationTask?.cancel()
-                rainAnimationTask = nil
+            .position(x: xPosition, y: yPosition)
+            .rotationEffect(.degrees(rotation))
+            .rotation3DEffect(.degrees(rotation3D), axis: (x: 0, y: spinDirection, z: 0))
+            .onAppear {
+                startAnimation()
             }
     }
     
-    private func animateParticle() {
-        // Trigger the animation sequence
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-            particleOpacity = opacity
-            
-            // Calculate random angle for explosion direction
-            let minAngle = CGFloat(openingAngle.degrees)
-            let maxAngle = CGFloat(closingAngle.degrees)
-            let randomAngle: CGFloat
-            
-            if minAngle <= maxAngle {
-                randomAngle = CGFloat.random(in: minAngle...maxAngle)
-            } else {
-                // Handle wrap-around case (e.g., 330° to 30°)
-                randomAngle = CGFloat.random(in: minAngle...(maxAngle + 360)).truncatingRemainder(dividingBy: 360)
+    private func startAnimation() {
+        // Position the confetti at the starting point with zero opacity
+        xPosition = randomX
+        yPosition = randomY - size
+        particleOpacity = 0
+        
+        // Delayed start for a more natural look
+        DispatchQueue.main.asyncAfter(deadline: .now() + randomDelay) {
+            // First animation phase: Explosion/spread and fade in
+            withAnimation(.easeOut(duration: 0.3)) {
+                particleOpacity = opacity
+                
+                // Calculate random angle for explosion direction
+                let minAngle = CGFloat(openingAngle.degrees)
+                let maxAngle = CGFloat(closingAngle.degrees)
+                let randomAngle = CGFloat.random(in: minAngle...maxAngle)
+                
+                // Calculate position using angle and distance
+                let distance = pow(CGFloat.random(in: 0.1...1), 0.5) * radius
+                xPosition = distance * cos(deg2rad(randomAngle))
+                yPosition = -distance * sin(deg2rad(randomAngle))
             }
             
-            // Calculate random distance for explosion radius
-            let distance = pow(CGFloat.random(in: 0.01...1), 2.0/7.0) * radius
+            // Apply continuous rotation for spinning effect
+            withAnimation(.linear(duration: 2).repeatForever(autoreverses: false)) {
+                rotation = 360 * randomRotationSpeed
+                rotation3D = 360 * randomRotationSpeed
+            }
             
-            // Calculate position using angle and distance
-            location.x = distance * cos(deg2rad(randomAngle))
-            location.y = -distance * sin(deg2rad(randomAngle))
-            
-            // Start 3D rotation immediately
-            rotation3DX = 360 * rotationSpeed
-            rotation3DZ = 360 * rotationSpeedZ
-        }
-        
-        // Cancel any existing delayed tasks
-        rainAnimationTask?.cancel()
-        
-        // Create a new task for rain animation
-        let task = DispatchWorkItem {
-            withAnimation(.timingCurve(0.12, 0, 0.39, 0, duration: Double(rainHeight / 300))) {
-                location.y += rainHeight
+            // Second animation phase: Falling down
+            withAnimation(.easeIn(duration: Double(rainHeight / 200)).delay(0.3)) {
+                yPosition += rainHeight
                 particleOpacity = 0
             }
         }
-        rainAnimationTask = task
-        
-        // Schedule the rain animation
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: task)
     }
     
     private func deg2rad(_ number: CGFloat) -> CGFloat {
@@ -270,3 +230,5 @@ struct RoundedCross: Shape {
         return path
     }
 }
+
+// IMPORTANT: DO NOT include the View extension here, it's already in ContentView.swift
