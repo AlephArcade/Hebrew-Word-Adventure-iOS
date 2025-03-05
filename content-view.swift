@@ -378,34 +378,6 @@ struct StartScreenView: View {
     }
 }
 
-// Extension to add confetti functionality to any view
-extension View {
-    func confetti(isActive: Binding<Bool>) -> some View {
-        ZStack {
-            self
-            
-            if isActive.wrappedValue {
-                ImprovedConfettiView(
-                    particleCount: 50,
-                    colors: [
-                        Color(red: 1.0, green: 0.85, blue: 0.35), // Yellowish
-                        Color(red: 0.3, green: 0.69, blue: 0.31), // Greenish
-                        Color(red: 0.13, green: 0.59, blue: 0.95), // Blueish
-                        Color(red: 0.91, green: 0.12, blue: 0.39), // Pinkish
-                        Color(red: 0.61, green: 0.15, blue: 0.69)  // Purplish
-                    ],
-                    confettiSize: 12,
-                    rainHeight: UIScreen.main.bounds.height * 1.5,
-                    openingAngle: .degrees(30),
-                    closingAngle: .degrees(150)
-                )
-                .ignoresSafeArea()
-                .allowsHitTesting(false)
-            }
-        }
-    }
-}
-
 // Preview
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
