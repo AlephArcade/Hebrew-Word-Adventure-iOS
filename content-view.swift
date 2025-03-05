@@ -5,7 +5,6 @@ struct ContentView: View {
     @State private var showingStartScreen = true
     @State private var showingSettings = false
     @State private var showingDictionary = false
-    @State private var showConfetti = false
     @State private var gameStartTime = Date()
     
     // For data persistence
@@ -93,7 +92,6 @@ struct ContentView: View {
                     }
                 }
                 .transition(.opacity)
-                .confetti(isActive: $showConfetti)
             }
         }
         .sheet(isPresented: $showingSettings) {
