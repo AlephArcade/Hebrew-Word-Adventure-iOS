@@ -251,7 +251,7 @@ struct MainGameView: View {
             }
             .padding()
             
-            // Add confetti overlay
+            // Add confetti overlay - moved outside the VStack with explicit zIndex
             if showConfetti {
                 ImprovedConfettiView(
                     particleCount: 50,
@@ -267,6 +267,7 @@ struct MainGameView: View {
                 )
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
+                .zIndex(100) // Ensure it's displayed on top
             }
         }
         .onAppear {
@@ -298,18 +299,34 @@ struct MainGameView: View {
     private func handleAnimationChange(_ newValue: Bool) {
         // Handle correct animation state change
         if newValue && !previousAnimatingCorrect {
+            // Set flags to begin animation sequence
             previousAnimatingCorrect = true
-            showConfetti = true
+            
+            // Show confetti immediately
+            withAnimation {
+                showConfetti = true
+            }
+            
+            // Play sound and haptic feedback
             AudioManager.shared.playCorrectAnswerSound()
             HapticManager.shared.success()
             
             // Hide confetti after animation completes
             DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-                showConfetti = false
+                withAnimation {
+                    showConfetti = false
+                }
             }
         } else if !newValue && previousAnimatingCorrect {
             // Reset the flag when animation ends
             previousAnimatingCorrect = false
+            
+            // Ensure confetti is hidden when animation ends
+            if showConfetti {
+                withAnimation {
+                    showConfetti = false
+                }
+            }
         }
     }
 }
